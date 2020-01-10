@@ -68,7 +68,9 @@ const App = props => {
                             <Link to="/pools">Kustannuspaikat</Link>
                         </li>
                     </Dropdown>
-                    <Link to="/logout">Kirjaudu ulos</Link>
+                    <Link to="/logout" style={{ whiteSpace: 'nowrap' }}>
+                        Kirjaudu ulos
+                    </Link>
                 </section>
             </header>
             <Switch>

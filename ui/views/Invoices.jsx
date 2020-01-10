@@ -36,7 +36,7 @@ const Claims = props => {
                         <td>Firma XYZ</td>
                         <td>Kunhan testiksi</td>
                         <td>31.1.2020</td>
-                        <td>123,50 €</td>
+                        <td>123,50€</td>
                         <td>Testiksi luotu</td>
                         <td>
                             <button
@@ -57,7 +57,7 @@ const Claims = props => {
                         <td>Firma XYZ</td>
                         <td>Kunhan testiksi</td>
                         <td>31.1.2020</td>
-                        <td>123,50 €</td>
+                        <td>123,50€</td>
                         <td>Testiksi luotu</td>
                         <td>
                             <button
@@ -78,7 +78,7 @@ const Claims = props => {
                         <td>Firma XYZ</td>
                         <td>Kunhan testiksi</td>
                         <td>31.1.2020</td>
-                        <td>123,50 €</td>
+                        <td>123,50€</td>
                         <td>Testiksi luotu</td>
                         <td>
                             <button
