@@ -1,10 +1,14 @@
 import React from 'react';
+import Page from './Page';
 
 const Claims = props => {
     return (
-        <main className="container grid-lg">
-            <h2>Ostolaskut</h2>
-            <div className="divider"></div>
+        <Page title="Ostolaskut" actions={(
+            <React.Fragment>
+                <button className="btn">Lähettäjät</button>
+                <button className="btn btn-primary">Luo uusi</button>
+            </React.Fragment>
+        )}>
             <ul className="tab">
                 <li className="tab-item active">
                     <a className="c-hand">Luotu</a>
@@ -110,7 +114,7 @@ const Claims = props => {
                 Seuraava
                 <i className="icon icon-arrow-right"></i>
             </button>
-        </main>
+        </Page>
     );
 };
 
