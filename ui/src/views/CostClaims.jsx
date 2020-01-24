@@ -12,14 +12,14 @@ const tabs = {
     rejected: 'Hylätty',
 };
 
-const Claims = props => {
+const CostClaims = props => {
     const [claims, setClaims] = useState([]);
     const [tab, setTab] = useState('created');
 
     const [admin, setAdmin] = useState(false);
 
     useEffect(() => {
-        fetch('http://localhost:3000/claims')
+        fetch('http://localhost:3000/costClaims')
             .then(res => res.json())
             .then(setClaims)
     }, [setClaims]);
@@ -57,7 +57,7 @@ const Claims = props => {
                     {data.map(claim => (
                         <tr key={claim.id}>
                             <td>{claim.createdAt}</td>
-                            <td><Link to={'/claims/' + claim.id}>{claim.description}</Link></td>
+                            <td><Link to={'/costclaims/' + claim.id}>{claim.description}</Link></td>
                             <td style={{ textAlign: 'right' }}>{euros.format(claim.amount)}</td>
                             <td>{claim.sourceOfMoney}</td>
                             {admin && <td>{claim.author}</td>}
@@ -75,4 +75,4 @@ const Claims = props => {
     );
 };
 
-export default Claims;
+export default CostClaims;

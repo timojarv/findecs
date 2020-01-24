@@ -111,7 +111,7 @@ const Navigation = props => {
             </Toggler>
             <Title>Findecs</Title>
             <NavLink
-                to="/claims"
+                to="/costclaims"
             >
                 <CreditCard />
                 <span>Kulukorvaukset</span>

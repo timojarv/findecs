@@ -6,7 +6,8 @@ import {
     Redirect
 } from 'react-router-dom';
 
-import Claims from './views/Claims';
+import CostClaims from './views/CostClaims';
+import CostClaim from './views/CostClaim';
 import PurchaseInvoices from './views/PurchaseInvoices';
 import Navigation from './Navigation';
 import styled from 'styled-components';
@@ -27,17 +28,12 @@ const App = props => {
             <Navigation />
             <Main>
                 <Switch>
-                    <Route path="/claims/new"></Route>
-                    <Route path="/claims/manage"></Route>
-                    <Route path="/claims/approve"></Route>
-                    <Route path="/claims">
-                        <Claims />
-                    </Route>
+                    <Route path="/costclaims/new"></Route>
+                    <Route path="/costclaims/:id" component={CostClaim}></Route>
+                    <Route path="/costclaims" component={CostClaims}></Route>
                     <Route path="/purchaseinvoices/senders"></Route>
                     <Route path="/purchaseinvoices/new"></Route>
-                    <Route path="/purchaseinvoices">
-                        <PurchaseInvoices />
-                    </Route>
+                    <Route path="/purchaseinvoices" component={PurchaseInvoices}></Route>
                     <Route path="/salesinvoices/new"></Route>
                     <Route path="/salesinvoices"></Route>
                     <Route path="/users/:id"></Route>
@@ -46,7 +42,7 @@ const App = props => {
                     <Route path="/logout"></Route>
                     <Route path="/login"></Route>
                     <Route path="/">
-                        <Redirect to="/claims" />
+                        <Redirect to="/costclaims" />
                     </Route>
                 </Switch>
             </Main>

@@ -1,121 +1,95 @@
-import React from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+
+
 import Page from './Page';
 
-const Claims = props => {
+const euros = new Intl.NumberFormat('fi-FI', { style: 'currency', currency: 'EUR' });
+
+const tabs = {
+    created: 'Luotu',
+    approved: 'Hyväksytty',
+    paid: 'Maksettu',
+    rejected: 'Hylätty',
+};
+
+const total = invoice => invoice.rows.reduce((t, row) => t + row.amount, 0);
+
+const PurchaseInvoices = props => {
+    const [invoices, setInvoices] = useState([]);
+    const [tab, setTab] = useState('created');
+
+
+    useEffect(() => {
+        fetch('http://localhost:3000/purchaseInvoices')
+            .then(res => res.json())
+            .then(setInvoices)
+    }, [setInvoices]);
+
+    const data = useMemo(() => invoices.filter(
+        invoice => invoice.status === tab
+    ), [invoices, tab]);
+
     return (
         <Page title="Ostolaskut" actions={(
             <React.Fragment>
-                <button className="btn">Lähettäjät</button>
-                <button className="btn btn-primary">Luo uusi</button>
+                <Link to="/purchaseinvoices/senders" className="btn">Lähettäjät</Link>
+                <Link to="/purchaseinvoices/new" className="btn btn-primary">Luo uusi</Link>
             </React.Fragment>
         )}>
             <ul className="tab">
-                <li className="tab-item active">
-                    <a className="c-hand">Luotu</a>
-                </li>
-                <li className="tab-item">
-                    <a className="c-hand">Hyväksytty</a>
-                </li>
-                <li className="tab-item">
-                    <a className="c-hand">Maksettu</a>
-                </li>
-                <li className="tab-item">
-                    <a className="c-hand">Hylätty</a>
-                </li>
+                {Object.entries(tabs).map(([key, title]) => (
+                    <li key={key} className={'tab-item ' + (tab === key && 'active')}>
+                        <a onClick={() => setTab(key)} className="c-hand">{title}</a>
+                    </li>
+                ))}
             </ul>
 
-            <table className="table" style={{ margin: '1.5em 0' }}>
+            <table style={{ tableLayout: 'fixed' }} className="w-full max-w-3xl text-left table">
                 <thead>
                     <tr>
                         <th>Lähettäjä</th>
                         <th>Kuvaus</th>
                         <th>Eräpäivä</th>
-                        <th>Summa</th>
+                        <th style={{ textAlign: 'right' }}>Summa</th>
                         <th>Huomautus</th>
                         <th>Toiminnot</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>Firma XYZ</td>
-                        <td>Kunhan testiksi</td>
-                        <td>31.1.2020</td>
-                        <td>123,50€</td>
-                        <td>Testiksi luotu</td>
-                        <td>
-                            <button
-                                className="btn btn-sm btn-action mr-2 tooltip"
-                                data-tooltip="Poista"
-                            >
-                                <i className="icon icon-delete"></i>
-                            </button>
-                            <button
-                                className="btn btn-sm btn-action tooltip"
-                                data-tooltip="Muokkaa"
-                            >
-                                <i className="icon icon-edit"></i>
-                            </button>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Firma XYZ</td>
-                        <td>Kunhan testiksi</td>
-                        <td>31.1.2020</td>
-                        <td>123,50€</td>
-                        <td>Testiksi luotu</td>
-                        <td>
-                            <button
-                                className="btn btn-sm btn-action mr-2 tooltip"
-                                data-tooltip="Poista"
-                            >
-                                <i className="icon icon-delete"></i>
-                            </button>
-                            <button
-                                className="btn btn-sm btn-action tooltip"
-                                data-tooltip="Muokkaa"
-                            >
-                                <i className="icon icon-edit"></i>
-                            </button>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Firma XYZ</td>
-                        <td>Kunhan testiksi</td>
-                        <td>31.1.2020</td>
-                        <td>123,50€</td>
-                        <td>Testiksi luotu</td>
-                        <td>
-                            <button
-                                className="btn btn-sm btn-action mr-2 tooltip"
-                                data-tooltip="Poista"
-                            >
-                                <i className="icon icon-delete"></i>
-                            </button>
-                            <button
-                                className="btn btn-sm btn-action tooltip"
-                                data-tooltip="Muokkaa"
-                            >
-                                <i className="icon icon-edit"></i>
-                            </button>
-                        </td>
-                    </tr>
+                    {data.map(invoice => (
+                        <tr key={invoice.id}>
+                            <td>{invoice.sender}</td>
+                            <td><Link to={'/invoices/' + invoice.id}>{invoice.description}</Link></td>
+                            <td>{invoice.dueDate}</td>
+                            <td style={{ textAlign: 'right' }}>{euros.format(total(invoice))}</td>
+                            <td>{invoice.note}</td>
+                            <td>
+                                <button
+                                    className="btn btn-sm btn-action mr-2 tooltip"
+                                    data-tooltip="Poista"
+                                >
+                                    <i className="icon icon-delete"></i>
+                                </button>
+                                <button
+                                    className="btn btn-sm btn-action tooltip"
+                                    data-tooltip="Muokkaa"
+                                >
+                                    <i className="icon icon-edit"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    ))}
                 </tbody>
             </table>
-
-            <p>
-                <em>Sivu 1/1, näytetään 3 riviä yhteensä 3 rivistä.</em>
-            </p>
-
-            <button className="btn mr-2 disabled">
-                <i className="icon icon-arrow-left"></i>
-                Edellinen
-            </button>
-            <button className="btn">
-                Seuraava
-                <i className="icon icon-arrow-right"></i>
-            </button>
+            {!data.length && <div className="empty">
+                <div className="empty-icon">
+                    <i className="icon icon-3x icon-more-horiz"></i>
+                </div>
+                <p className="empty-title h5">Ei kulukorvauksia</p>
+            </div>}
         </Page>
     );
 };
 
-export default Claims;
+export default PurchaseInvoices;

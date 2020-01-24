@@ -5,7 +5,7 @@ const Page = props => {
     return (
         <React.Fragment>
             <div className="action-group">
-                <h2 style={{ flex: 1 }} className="text-bold">{title}</h2>
+                <h2 style={{ flex: 1, fontSize: '2.5em' }} className="text-bold">{title}</h2>
                 {actions}
             </div>
             <div className="divider pb-2"></div>
