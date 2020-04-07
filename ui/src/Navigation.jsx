@@ -4,6 +4,7 @@ import { NavLink } from 'react-router-dom';
 import IndecsLogoSVG from './indecs.svg';
 import { CreditCard, FileText, DollarSign, CheckSquare, Users, Layers, Settings, LogOut, X, Menu } from 'react-feather';
 import styled from 'styled-components';
+import colors from './util/colors';
 
 const Nav = styled.nav`
     left: 0;
@@ -12,11 +13,13 @@ const Nav = styled.nav`
     padding: 0.75rem 0;
     overflow: hidden;
     height: ${props => props.open ? 'auto' : '3rem'}
+    background: ${props => colors.indigo[7]};
+    box-sizing: border-box;
 
     @media only screen and (min-width: 840px) {
         position: fixed;
         height: 100vh;
-        width: 12rem;
+        width: 14rem;
         padding: 1rem 0;
     }
 
@@ -48,7 +51,7 @@ const Nav = styled.nav`
         }
 
         span {
-            font-weigth: semibold;
+            font-weigth: medium;
             margin-left: 1.5rem;
         }
     }
@@ -82,6 +85,7 @@ const Title = styled.h1`
     line-height: 1.25;
     margin-left: 1.25rem;
     margin-bottom: 1.5rem;
+    margin-top: 0;
 `;
 
 const IndecsLogo = styled(IndecsLogoSVG)`
@@ -102,7 +106,7 @@ const IndecsLogo = styled(IndecsLogoSVG)`
 const Navigation = props => {
     const [open, setOpen] = useState(false);
     return (
-        <Nav open={open} className="bg-primary">
+        <Nav open={open}>
             <Toggler onClick={() => setOpen(!open)}>
                 {open
                     ? <X />

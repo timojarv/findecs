@@ -2,21 +2,46 @@ import React, { useEffect, useState, useMemo } from 'react';
 
 import Page from './Page';
 import { Link } from 'react-router-dom';
+import styled from 'styled-components';
+
+import { Pill, Button, Table, Sortable } from '../base';
+import { statuses, statusColors } from '../util/statuses';
 
 const euros = new Intl.NumberFormat('fi-FI', { style: 'currency', currency: 'EUR' });
 
-const tabs = {
-    created: 'Luotu',
-    approved: 'Hyväksytty',
-    paid: 'Maksettu',
-    rejected: 'Hylätty',
+const Switch = styled.label`
+    margin-right: 2rem;
+    
+    input {
+        margin-right: 0.25rem;
+    }
+
+    span {
+        opacity: 0.6;
+        transition: opacity 0.3s;
+    }
+
+    input:checked + span {
+        opacity: 1;
+    }
+`;
+
+const sortByKey = (key, asc) => (a, b) => {
+    if (a[key] === b[key]) {
+        return 0;
+    }
+
+    if (a[key] < b[key]) {
+        return asc ? -1 : 1;
+    } else {
+        return asc ? 1 : -1;
+    }
 };
 
 const CostClaims = props => {
     const [claims, setClaims] = useState([]);
-    const [tab, setTab] = useState('created');
-
     const [admin, setAdmin] = useState(false);
+    const [sort, setSort] = useState({ key: 'createdAt', order: 'desc' });
 
     useEffect(() => {
         fetch('http://localhost:3000/costClaims')
@@ -25,32 +50,26 @@ const CostClaims = props => {
     }, [setClaims]);
 
     const data = useMemo(() => claims.filter(
-        claim => claim.status === tab && (admin || claim.author === 'admin')
-    ), [claims, tab, admin]);
+        claim => admin || claim.author === 'admin'
+    ).sort(sortByKey(sort.key, sort.order === 'asc')), [claims, admin, sort]);
 
     return (
         <Page title="Kulukorvaukset" actions={<React.Fragment>
-            <label className="form-switch">
+            <Switch>
                 <input checked={admin} onChange={e => setAdmin(e.target.checked)} type="checkbox" />
-                <i className="form-icon"></i> Hallinnoi
-                </label>
-            <Link to="/claims/new" className="btn btn-primary">Luo uusi</Link>
+                <span>Hallinnoi</span>
+            </Switch>
+            <Button as={Link} to="/claims/new" color="indigo">Luo uusi</Button>
         </React.Fragment>}>
-            <ul className="tab">
-                {Object.entries(tabs).map(([key, title]) => (
-                    <li key={key} className={'tab-item ' + (tab === key && 'active')}>
-                        <a onClick={() => setTab(key)} className="c-hand">{title}</a>
-                    </li>
-                ))}
-            </ul>
-            <table style={{ tableLayout: 'fixed' }} className="w-full max-w-3xl text-left table">
+            <Table>
                 <thead>
                     <tr>
-                        <th style={{ width: 100 }}>Luotu</th>
-                        <th>Kuvaus</th>
-                        <th style={{ width: 100, textAlign: 'right' }}>Summa</th>
-                        <th style={{ width: 150 }}>Rahan lähde</th>
-                        {admin && <th style={{ width: 150 }}>Käyttäjä</th>}
+                        <Sortable by="createdAt" setter={setSort} sort={sort}>Päivämäärä</Sortable>
+                        <Sortable by="description" setter={setSort} sort={sort}>Kuvaus</Sortable>
+                        <Sortable by="amount" setter={setSort} sort={sort} className="right">Summa</Sortable>
+                        <Sortable by="sourceOfMoney" setter={setSort} sort={sort} className="lg">Rahan lähde</Sortable>
+                        {admin && <Sortable by="author" setter={setSort} sort={sort}>Käyttäjä</Sortable>}
+                        <Sortable by="status" setter={setSort} sort={sort}>Tila</Sortable>
                     </tr>
                 </thead>
                 <tbody>
@@ -58,13 +77,18 @@ const CostClaims = props => {
                         <tr key={claim.id}>
                             <td>{claim.createdAt}</td>
                             <td><Link to={'/costclaims/' + claim.id}>{claim.description}</Link></td>
-                            <td style={{ textAlign: 'right' }}>{euros.format(claim.amount)}</td>
-                            <td>{claim.sourceOfMoney}</td>
+                            <td className="right">{euros.format(claim.amount)}</td>
+                            <td className="lg">{claim.sourceOfMoney}</td>
                             {admin && <td>{claim.author}</td>}
+                            <td>
+                                <Pill color={statusColors[claim.status]}>
+                                    {statuses[claim.status]}
+                                </Pill>
+                            </td>
                         </tr>
                     ))}
                 </tbody>
-            </table>
+            </Table>
             {!data.length && <div className="empty">
                 <div className="empty-icon">
                     <i className="icon icon-3x icon-more-horiz"></i>

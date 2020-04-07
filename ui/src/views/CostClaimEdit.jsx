@@ -5,46 +5,8 @@ import { Paperclip, Printer, Edit, Check, X } from 'react-feather';
 import { Button, Pill } from '../base';
 import colors from '../util/colors';
 import { statuses } from '../util/statuses';
-import { Link } from 'react-router-dom';
 
 const euros = new Intl.NumberFormat('fi-FI', { style: 'currency', currency: 'EUR' });
-
-const Container = styled.section`
-    display: flex;
-    justify-content: space-between;
-    flex-wrap: wrap;
-
-    h3 {
-        color: ${props => colors.gray[8]};
-        margin-bottom: 2rem;
-    }
-
-    .details {
-        flex: 1;
-        max-width: 600px;
-    }
-
-    dl {
-        margin-top: 0;
-        margin-bottom: 2rem;
-        width: 300px;
-        display: inline-block;
-        vertical-align: top;
-
-        dt {
-            color: ${props => colors.gray[6]};
-            font-weight: 400;
-            margin-bottom: 0.5rem;
-            font-size: 0.9em;
-        }
-
-        dd {
-            margin-left: 0;
-            margin-bottom: 1.5rem;
-            font-size: 1.1em
-        }
-    }
-`;
 
 const ReceiptContainer = styled.div`
     width: min-content;
@@ -95,7 +57,7 @@ const Receipt = props => {
 const ClaimData = props => {
     const { claim } = props;
     return (
-        <Container>
+        <div>
             <div className="details">
                 <h3 className="text-bold">Tiedot</h3>
                 <dl>
@@ -129,12 +91,12 @@ const ClaimData = props => {
                     <Receipt key={i} receipt={receipt} />
                 ))}
             </div>
-        </Container>
+        </div>
     );
 };
 
-const CostClaim = props => {
-    const { match: { params: { id } }, location } = props;
+const CostClaimEdit = props => {
+    const { match: { params: { id = '' } } } = props;
     const [claim, setClaim] = useState(false);
 
     useEffect(() => {
@@ -143,26 +105,15 @@ const CostClaim = props => {
             .then(setClaim)
     }, [setClaim]);
     return (
-        <Page link="/costclaims" title={'Kulukorvaus #' + id} actions={(
-            <React.Fragment>
-                <Button color="green" style={{ marginRight: '2rem' }} className="icon">
-                    <Check />
-                </Button>
-                <Button color="red" style={{ marginRight: '2rem' }} className="icon">
-                    <X />
-                </Button>
-                <Button as={Link} to={location.pathname + '/print'} color="indigo" style={{ marginRight: '2.5rem' }} className="icon">
-                    <Printer />
-                </Button>
-                <Button as={Link} to={location.pathname + '/edit'} color="indigo">
-                    Muokkaa
-                </Button>
-            </React.Fragment>
+        <Page link={'/costclaims/' + id} title="Muokkaa kulukorvausta" actions={(
+            <Button color="red">
+                Poista
+            </Button>
         )}>
             {claim ? <ClaimData claim={claim} /> : <div className="loading loading-lg" />}
         </Page>
     );
 };
 
-export default CostClaim;
+export default CostClaimEdit;
 

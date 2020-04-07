@@ -8,6 +8,7 @@ import {
 
 import CostClaims from './views/CostClaims';
 import CostClaim from './views/CostClaim';
+import CostClaimEdit from './views/CostClaimEdit';
 import PurchaseInvoices from './views/PurchaseInvoices';
 import Navigation from './Navigation';
 import styled from 'styled-components';
@@ -15,9 +16,11 @@ import styled from 'styled-components';
 const Main = styled.main`
     flex: 1;
     padding: 1rem;
+    max-width: 1000px;
+    overflow: auto;
 
     @media only screen and (min-width: 840px) {
-        margin-left: 12rem;
+        margin-left: 14rem;
         padding: 3rem;
     }
 `
@@ -29,6 +32,8 @@ const App = props => {
             <Main>
                 <Switch>
                     <Route path="/costclaims/new"></Route>
+                    <Route path="/costclaims/:id/print" component={CostClaim}></Route>
+                    <Route path="/costclaims/:id/edit" component={CostClaimEdit}></Route>
                     <Route path="/costclaims/:id" component={CostClaim}></Route>
                     <Route path="/costclaims" component={CostClaims}></Route>
                     <Route path="/purchaseinvoices/senders"></Route>

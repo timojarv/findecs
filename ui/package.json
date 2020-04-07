@@ -9,6 +9,7 @@
     },
     "dependencies": {
         "@svgr/parcel-plugin-svgr": "^5.0.1",
+        "normalize.css": "^8.0.1",
         "postcss-modules": "^1.5.0",
         "react": "^16.12.0",
         "react-dom": "^16.12.0",
