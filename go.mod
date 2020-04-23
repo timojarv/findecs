@@ -14,6 +14,5 @@ require (
 	github.com/sirupsen/logrus v1.5.0
 	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
 	github.com/vektah/gqlparser/v2 v2.0.1
-	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e // indirect
 	google.golang.org/genproto v0.0.0-20200407120235-9eb9bb161a06 // indirect
 )
