@@ -1,0 +1,1 @@
+ALTER TABLE cost_claims ADD details TEXT DEFAULT '';

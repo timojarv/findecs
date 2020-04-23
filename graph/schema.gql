@@ -1,0 +1,100 @@
+enum Status {
+    created
+    approved
+    rejected
+    paid
+}
+
+enum SourceOfMoney {
+    ownAccount
+    otherAccount
+    cash
+}
+
+enum UserRole {
+    basic
+    admin
+    root
+}
+
+scalar Date
+scalar DateTime
+
+type User {
+    id: ID!
+    name: String!
+    email: String!
+    signature: String
+    role: UserRole!
+}
+
+input UserInput {
+    name: String!
+    email: String!
+}
+
+type Receipt {
+    id: ID!
+    attachment: String!
+    amount: Float!
+    date: Date!
+}
+
+input ReceiptInput {
+    date: Date!
+    amount: Float!
+    attachment: String!
+}
+
+type CostPool {
+    id: ID!
+    name: String!
+    budget: Float!
+    total: Float!
+}
+
+input CostPoolInput {
+    name: String!
+    budget: Float!
+}
+
+type CostClaim {
+    id: ID!
+    runningNumber: Int!
+    description: String!
+    author: User!
+    costPool: CostPool!
+    status: Status!
+    details: String
+    created: DateTime!
+    modified: DateTime
+    acceptedBy: User
+    sourceOfMoney: SourceOfMoney!
+    receipts: [Receipt]!
+    total: Float!
+}
+
+input CostClaimInput {
+    description: String!
+    author: ID!
+    costPool: ID!
+    details: String
+    sourceOfMoney: SourceOfMoney!
+}
+
+type Query {
+    costClaim(id: ID!): CostClaim
+    costClaims: [CostClaim!]!
+    user(id: ID!): User
+    users: [User!]!
+    costPools: [CostPool!]!
+}
+
+type Mutation {
+    createUser(user: UserInput!): User!
+    createCostPool(costPool: CostPoolInput!): CostPool!
+    createCostClaim(
+        costClaim: CostClaimInput!
+        receipts: [ReceiptInput!]!
+    ): CostClaim!
+}

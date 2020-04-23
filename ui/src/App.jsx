@@ -3,54 +3,49 @@ import {
     HashRouter as Router,
     Switch,
     Route,
-    Redirect
+    Redirect,
 } from 'react-router-dom';
 
 import CostClaims from './views/CostClaims';
 import CostClaim from './views/CostClaim';
-import CostClaimEdit from './views/CostClaimEdit';
-import PurchaseInvoices from './views/PurchaseInvoices';
-import Navigation from './Navigation';
-import styled from 'styled-components';
+import Navigation from './components/Navigation';
+import { Box } from '@chakra-ui/core';
+import CostPools from './views/CostPools';
+import Users from './views/Users';
+import NewUser from './views/NewUser';
+import NewCostClaim from './views/NewCostClaim';
 
-const Main = styled.main`
-    flex: 1;
-    padding: 1rem;
-    max-width: 1000px;
-    overflow: auto;
-
-    @media only screen and (min-width: 840px) {
-        margin-left: 14rem;
-        padding: 3rem;
-    }
-`
-
-const App = props => {
+const App = (props) => {
     return (
         <Router>
             <Navigation />
-            <Main>
+            <Box margin="auto" maxWidth="1200px" px={[4, 16]} py={4}>
                 <Switch>
-                    <Route path="/costclaims/new"></Route>
-                    <Route path="/costclaims/:id/print" component={CostClaim}></Route>
-                    <Route path="/costclaims/:id/edit" component={CostClaimEdit}></Route>
-                    <Route path="/costclaims/:id" component={CostClaim}></Route>
-                    <Route path="/costclaims" component={CostClaims}></Route>
+                    <Route
+                        path="/costClaims/new"
+                        component={NewCostClaim}
+                    ></Route>
+                    <Route
+                        path="/costClaims/:id/print"
+                        component={CostClaim}
+                    ></Route>
+                    <Route path="/costClaims/:id/edit"></Route>
+                    <Route path="/costClaims/:id" component={CostClaim}></Route>
+                    <Route path="/costClaims" component={CostClaims}></Route>
                     <Route path="/purchaseinvoices/senders"></Route>
                     <Route path="/purchaseinvoices/new"></Route>
-                    <Route path="/purchaseinvoices" component={PurchaseInvoices}></Route>
+                    <Route path="/purchaseinvoices"></Route>
                     <Route path="/salesinvoices/new"></Route>
                     <Route path="/salesinvoices"></Route>
+                    <Route path="/users/new" component={NewUser}></Route>
                     <Route path="/users/:id"></Route>
-                    <Route path="/users"></Route>
-                    <Route path="/costpools"></Route>
+                    <Route path="/users" component={Users}></Route>
+                    <Route path="/costPools" component={CostPools}></Route>
                     <Route path="/logout"></Route>
                     <Route path="/login"></Route>
-                    <Route path="/">
-                        <Redirect to="/costclaims" />
-                    </Route>
+                    <Redirect to="/costClaims" />
                 </Switch>
-            </Main>
+            </Box>
         </Router>
     );
 };

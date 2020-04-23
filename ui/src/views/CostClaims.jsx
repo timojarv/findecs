@@ -1,101 +1,237 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
+import produce from 'immer';
+import {
+    Box,
+    Heading,
+    Flex,
+    Checkbox,
+    Link,
+    Badge,
+    MenuButton,
+    Menu,
+    Button,
+    MenuList,
+    MenuItem,
+    Text,
+    Spinner,
+} from '@chakra-ui/core';
+import {
+    TableContainer,
+    Table,
+    THead,
+    TR,
+    TH,
+    TBody,
+    TD,
+} from '../components/Table';
+import { MoreVertical } from 'react-feather';
+import { statuses, statusColors } from '../util/metadata';
+import { formatCurrency, formatDate } from '../util/format';
+import { useQuery } from 'urql';
+import ErrorDisplay from '../components/ErrorDisplay';
 
-import Page from './Page';
-import { Link } from 'react-router-dom';
-import styled from 'styled-components';
-
-import { Pill, Button, Table, Sortable } from '../base';
-import { statuses, statusColors } from '../util/statuses';
-
-const euros = new Intl.NumberFormat('fi-FI', { style: 'currency', currency: 'EUR' });
-
-const Switch = styled.label`
-    margin-right: 2rem;
-    
-    input {
-        margin-right: 0.25rem;
-    }
-
-    span {
-        opacity: 0.6;
-        transition: opacity 0.3s;
-    }
-
-    input:checked + span {
-        opacity: 1;
+const query = `
+    query {
+        costClaims {
+            id
+            description
+            created
+            total
+            status
+            author {
+                id
+                name
+            }
+        }
     }
 `;
 
-const sortByKey = (key, asc) => (a, b) => {
-    if (a[key] === b[key]) {
-        return 0;
-    }
+const renderClaim = (selected, handleSelect) => (claim) => (
+    <TR key={claim.id}>
+        <TD display={['none', 'table-cell']} pr={[1, 1]} pl={[4, 6]}>
+            <Flex py={4} align="center">
+                <Checkbox
+                    isChecked={selected.has(claim.id)}
+                    onChange={() => handleSelect(claim.id)}
+                    size="lg"
+                    variantColor="indigo"
+                />
+            </Flex>
+        </TD>
+        <TD>
+            <Link
+                as={RouterLink}
+                to={`/costClaims/${claim.id}`}
+                color="indigo.600"
+                py={2}
+                display="block"
+            >
+                {claim.description}
+            </Link>
+        </TD>
+        <TD display={['none', 'table-cell']}>
+            <Link
+                whiteSpace="nowrap"
+                as={RouterLink}
+                to="/users/timojarv"
+                color="indigo.600"
+            >
+                {claim.author.name}
+            </Link>
+        </TD>
+        <TD>{formatDate(claim.created)}</TD>
+        <TD textAlign="right">{formatCurrency(claim.total)}</TD>
+        <TD textAlign="right">
+            <Badge
+                fontSize="0.8em"
+                mr={-1}
+                variantColor={statusColors[claim.status]}
+            >
+                {statuses[claim.status]}
+            </Badge>
+        </TD>
+        <TD display={['none', 'table-cell']} width={8}>
+            <Menu>
+                <MenuButton
+                    color="gray.500"
+                    as={Button}
+                    variant="ghost"
+                    size="xs"
+                >
+                    <MoreVertical />
+                </MenuButton>
+                <MenuList>
+                    <MenuItem>Hyväksy</MenuItem>
+                    <MenuItem>Muokkaa</MenuItem>
+                    <MenuItem color="red.500">Poista</MenuItem>
+                </MenuList>
+            </Menu>
+        </TD>
+    </TR>
+);
 
-    if (a[key] < b[key]) {
-        return asc ? -1 : 1;
-    } else {
-        return asc ? 1 : -1;
-    }
-};
+const CostClaims = (props) => {
+    // Row selection
+    const [selected, setSelected] = useState(new Set());
 
-const CostClaims = props => {
-    const [claims, setClaims] = useState([]);
-    const [admin, setAdmin] = useState(false);
-    const [sort, setSort] = useState({ key: 'createdAt', order: 'desc' });
+    const [result] = useQuery({ query });
+    const claims = result.data ? result.data.costClaims : [];
 
-    useEffect(() => {
-        fetch('http://localhost:3000/costClaims')
-            .then(res => res.json())
-            .then(setClaims)
-    }, [setClaims]);
+    const handleSelect = (key) => {
+        if (selected.has(key)) {
+            setSelected(
+                produce(selected, (draft) => {
+                    draft.delete(key);
+                })
+            );
+        } else {
+            setSelected(
+                produce(selected, (draft) => {
+                    draft.add(key);
+                })
+            );
+        }
+    };
 
-    const data = useMemo(() => claims.filter(
-        claim => admin || claim.author === 'admin'
-    ).sort(sortByKey(sort.key, sort.order === 'asc')), [claims, admin, sort]);
+    const handleSelectAll = () => {
+        if (selected.size === claims.length) {
+            setSelected(new Set());
+        } else {
+            setSelected(new Set(claims.map(({ id }) => id)));
+        }
+    };
 
     return (
-        <Page title="Kulukorvaukset" actions={<React.Fragment>
-            <Switch>
-                <input checked={admin} onChange={e => setAdmin(e.target.checked)} type="checkbox" />
-                <span>Hallinnoi</span>
-            </Switch>
-            <Button as={Link} to="/claims/new" color="indigo">Luo uusi</Button>
-        </React.Fragment>}>
-            <Table>
-                <thead>
-                    <tr>
-                        <Sortable by="createdAt" setter={setSort} sort={sort}>Päivämäärä</Sortable>
-                        <Sortable by="description" setter={setSort} sort={sort}>Kuvaus</Sortable>
-                        <Sortable by="amount" setter={setSort} sort={sort} className="right">Summa</Sortable>
-                        <Sortable by="sourceOfMoney" setter={setSort} sort={sort} className="lg">Rahan lähde</Sortable>
-                        {admin && <Sortable by="author" setter={setSort} sort={sort}>Käyttäjä</Sortable>}
-                        <Sortable by="status" setter={setSort} sort={sort}>Tila</Sortable>
-                    </tr>
-                </thead>
-                <tbody>
-                    {data.map(claim => (
-                        <tr key={claim.id}>
-                            <td>{claim.createdAt}</td>
-                            <td><Link to={'/costclaims/' + claim.id}>{claim.description}</Link></td>
-                            <td className="right">{euros.format(claim.amount)}</td>
-                            <td className="lg">{claim.sourceOfMoney}</td>
-                            {admin && <td>{claim.author}</td>}
-                            <td>
-                                <Pill color={statusColors[claim.status]}>
-                                    {statuses[claim.status]}
-                                </Pill>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </Table>
-            {!data.length && <div className="empty">
-                <div className="empty-icon">
-                    <i className="icon icon-3x icon-more-horiz"></i>
-                </div>
-                <p className="empty-title h5">Ei kulukorvauksia</p>
-            </div>}
-        </Page>
+        <Box pt={8}>
+            <Heading as="h2">Kulukorvaukset</Heading>
+            <Flex align="center" my={6}>
+                <Button
+                    as={RouterLink}
+                    leftIcon="add"
+                    variantColor="indigo"
+                    to="/costClaims/new"
+                >
+                    Luo uusi
+                </Button>
+                <Box flexGrow={1} />
+                {selected.size > 0 ? (
+                    <Flex align="baseline">
+                        <Text fontSize="sm" color="gray.700" mr={3} as="strong">
+                            Valitut:{' '}
+                        </Text>
+                        <Button
+                            ml={2}
+                            variant="solid"
+                            size="sm"
+                            variantColor="green"
+                        >
+                            Hyväksy
+                        </Button>
+                        <Button
+                            ml={2}
+                            variant="solid"
+                            size="sm"
+                            variantColor="red"
+                        >
+                            Hylkää
+                        </Button>
+                        <Button
+                            ml={2}
+                            variant="solid"
+                            size="sm"
+                            variantColor="red"
+                        >
+                            Poista
+                        </Button>
+                    </Flex>
+                ) : null}
+            </Flex>
+            {result.fetching ? <Spinner color="indigo.500" size="xl" /> : null}
+            <ErrorDisplay error={result.error} />
+            {result.data ? (
+                <TableContainer>
+                    <Table>
+                        <THead>
+                            <TR>
+                                <TH
+                                    display={['none', 'table-cell']}
+                                    pl={[4, 6]}
+                                    pr={[0, 0]}
+                                >
+                                    <Checkbox
+                                        size="lg"
+                                        variantColor="indigo"
+                                        isChecked={
+                                            selected.size === claims.length
+                                        }
+                                        isIndeterminate={
+                                            selected.size < claims.length &&
+                                            selected.size !== 0
+                                        }
+                                        onChange={handleSelectAll}
+                                    />
+                                </TH>
+                                <TH textAlign="left">Kuvaus</TH>
+                                <TH
+                                    display={['none', 'table-cell']}
+                                    textAlign="left"
+                                >
+                                    Tekijä
+                                </TH>
+                                <TH textAlign="left">Päiväys</TH>
+                                <TH textAlign="right">Summa</TH>
+                                <TH textAlign="right">Tila</TH>
+                                <TH display={['none', 'table-cell']}></TH>
+                            </TR>
+                        </THead>
+                        <TBody>
+                            {claims.map(renderClaim(selected, handleSelect))}
+                        </TBody>
+                    </Table>
+                </TableContainer>
+            ) : null}
+        </Box>
     );
 };
 

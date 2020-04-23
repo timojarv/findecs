@@ -1,22 +1,39 @@
-create table users (
-    id varchar(64) primary key,
-    name varchar(255) not null,
-    email varchar(255) not null,
-    signature varchar(64),
-    pw_hash varchar(64) not null
+CREATE TABLE users (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    signature VARCHAR(64),
+    pw_hash VARCHAR(64) NOT NULL
 );
 
-create table cost_claims (
-    id varchar(64) primary key,
-    running_number int not null,
-    description text,
-    user varchar(64) not null,
-    cost_pool varchar(64) not null,
-    status varchar(64) not null,
-    status_reason text,
-    source_of_money varchar(64) not null,
-    created datetime default current_timestamp,
-    modified datetime,
-    accepted_by varchar(64),
-    foreign key (user) references users(id)
+CREATE TABLE cost_pools (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(64) NOT NULL
+);
+
+CREATE TABLE cost_claims (
+    id VARCHAR(64) PRIMARY KEY,
+    running_number INT NOT NULL,
+    description TEXT NOT NULL,
+    author VARCHAR(64) NOT NULL,
+    cost_pool VARCHAR(64) NOT NULL,
+    status ENUM('created', 'approved', 'rejected', 'paid') NOT NULL,
+    status_reason TEXT,
+    source_of_money ENUM('ownAccount', 'otherAccount', 'cash') NOT NULL,
+    created DATETIME DEFAULT CURRENT_TIMESTAMP,
+    modified DATETIME ON UPDATE CURRENT_TIMESTAMP,
+    year INT DEFAULT YEAR(CURRENT_TIMESTAMP),
+    accepted_by VARCHAR(64),
+    FOREIGN KEY (author) REFERENCES users (id),
+    FOREIGN KEY (accepted_by) REFERENCES users (id),
+    FOREIGN KEY (cost_pool) REFERENCES cost_pools (id)
+);
+
+CREATE TABLE receipts (
+    id VARCHAR(64) PRIMARY KEY,
+    date DATETIME NOT NULL,
+    amount FLOAT NOT NULL,
+    attachment VARCHAR(256) NOT NULL,
+    cost_claim VARCHAR(64) NOT NULL,
+    FOREIGN KEY (cost_claim) REFERENCES cost_claims (id)
 );

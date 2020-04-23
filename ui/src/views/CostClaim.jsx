@@ -1,168 +1,207 @@
-import React, { useState, useEffect } from 'react';
-import Page from './Page';
-import styled from 'styled-components';
-import { Paperclip, Printer, Edit, Check, X } from 'react-feather';
-import { Button, Pill } from '../base';
-import colors from '../util/colors';
-import { statuses } from '../util/statuses';
-import { Link } from 'react-router-dom';
+import React from 'react';
+import { Link as RouterLink } from 'react-router-dom';
+import {
+    Box,
+    Heading,
+    Divider,
+    Flex,
+    Button,
+    Text,
+    Image,
+    Stack,
+    IconButton,
+    Link,
+    Badge,
+    Spinner,
+} from '@chakra-ui/core';
+import { Printer, Edit } from 'react-feather';
+import { DL, DT, DD } from '../components/DescriptionList';
+import { statuses, statusColors, sourcesOfMoney } from '../util/metadata';
+import { formatDateTime, formatCurrency, formatDate } from '../util/format';
+import { useQuery } from 'urql';
+import ErrorDisplay from '../components/ErrorDisplay';
 
-const euros = new Intl.NumberFormat('fi-FI', { style: 'currency', currency: 'EUR' });
-
-const Container = styled.section`
-    display: flex;
-    justify-content: space-between;
-    flex-wrap: wrap;
-
-    h3 {
-        color: ${props => colors.gray[8]};
-        margin-bottom: 2rem;
-    }
-
-    .details {
-        flex: 1;
-        max-width: 600px;
-    }
-
-    dl {
-        margin-top: 0;
-        margin-bottom: 2rem;
-        width: 300px;
-        display: inline-block;
-        vertical-align: top;
-
-        dt {
-            color: ${props => colors.gray[6]};
-            font-weight: 400;
-            margin-bottom: 0.5rem;
-            font-size: 0.9em;
-        }
-
-        dd {
-            margin-left: 0;
-            margin-bottom: 1.5rem;
-            font-size: 1.1em
+const query = `
+    query FetchCostClaim ($id: ID!) {
+        costClaim(id: $id) {
+            id
+            description
+            runningNumber
+            author {
+                id
+                name
+                email
+            }
+            details
+            created
+            modified
+            status
+            acceptedBy {
+                id
+                name
+                email
+            }
+            sourceOfMoney
+            costPool {
+                id
+                name
+            }
+            receipts {
+                id
+                date
+                amount
+            }
+            total
         }
     }
 `;
 
-const ReceiptContainer = styled.div`
-    width: min-content;
-    margin-bottom: 1rem;
-    box-shadow 1px 1px 4px 0 rgba(0,0,0,0.3);
-    border-radius: 4px;
-    overflow: hidden;
-    border: 1px solid ${props => colors.gray[3]};
-
-    img {
-        object-fit: cover;
-        width: 300px;
-        height: 200px;
-        border-bottom: 1px solid ${props => colors.gray[1]};
-    }
-
-    div {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1rem;
-    }
-
-    strong {
-        color: ${props => colors.gray[7]};
-    }
-
-    a {
-        color: ${props => colors.indigo[5]};
-    }
-`;
-
-const Receipt = props => {
-    const { receipt } = props;
-    return (
-        <ReceiptContainer>
-            <img src={receipt.attachment} alt="" />
-            <div>
-                <strong>{euros.format(receipt.amount)}</strong>
-                <Button className="icon" color="indigo" target="_blank" href={receipt.attachment}>
-                    <Paperclip />
+const renderClaim = (claim) =>
+    claim ? (
+        <React.Fragment>
+            <Flex align="baseline">
+                <Heading flexGrow={1} as="h2" size="lg">
+                    {claim.description}
+                </Heading>
+            </Flex>
+            <Flex align="center" my={4}>
+                <Text fontSize="lg" color="gray.600">
+                    {claim.runningNumber} / 2020
+                </Text>
+                <Text color="gray.500" mx={3}>
+                    &bull;
+                </Text>
+                <Badge
+                    rounded="md"
+                    py={1}
+                    px={2}
+                    variantColor={statusColors[claim.status]}
+                >
+                    {statuses[claim.status]}
+                </Badge>
+                <Box flexGrow={1} />
+                <Button
+                    flexShrink={0}
+                    variant="outline"
+                    variantColor="indigo"
+                    size="sm"
+                    as={RouterLink}
+                    target="_blank"
+                    to={`/costClaims/${claim.id}/print`}
+                >
+                    <Text display={['none', 'inline-block']} mr={2}>
+                        Tulosta
+                    </Text>
+                    <Printer size="1em" />
                 </Button>
-            </div>
-        </ReceiptContainer>
-    );
-};
-
-const ClaimData = props => {
-    const { claim } = props;
-    return (
-        <Container>
-            <div className="details">
-                <h3 className="text-bold">Tiedot</h3>
-                <dl>
-                    <dt>Kuvaus</dt>
-                    <dd>{claim.description}</dd>
-                    <dt>Luotu</dt>
-                    <dd>{claim.createdAt}</dd>
-                    <dt>Summa</dt>
-                    <dd>{euros.format(claim.amount)}</dd>
-                    <dt>Kustannuspaikka</dt>
-                    <dd>{claim.costPool}</dd>
-                    <dt>Tekijä</dt>
-                    <dd>{claim.author}</dd>
-                </dl>
-                <dl>
-                    <dt>Lisätiedot</dt>
-                    <dd>{claim.details}</dd>
-                    <dt>Rahan lähde</dt>
-                    <dd>{claim.sourceOfMoney}</dd>
-                    <dt>Status</dt>
-                    <dd>
-                        {statuses[claim.status]}
-                    </dd>
-                    <dt>Statuksen syy</dt>
-                    <dd>{claim.statusReason}</dd>
-                </dl>
-            </div>
-            <div className="receipts">
-                <h3>Kuitit</h3>
-                {claim.receipts.map((receipt, i) => (
-                    <Receipt key={i} receipt={receipt} />
+                <Button
+                    flexShrink={0}
+                    ml={4}
+                    variant="outline"
+                    variantColor="indigo"
+                    size="sm"
+                >
+                    <Text display={['none', 'inline-block']} mr={2}>
+                        Muokkaa
+                    </Text>
+                    <Edit size="1em" />
+                </Button>
+            </Flex>
+            <DL>
+                <DT>Summa</DT>
+                <DD>{formatCurrency(claim.total)}</DD>
+                <DT>Tekijä</DT>
+                <DD>
+                    <Link color="indigo.700">
+                        {claim.author.name} &lt;{claim.author.email}&gt;
+                    </Link>
+                </DD>
+                <DT>Kustannuspaikka</DT>
+                <DD>
+                    <Link color="indigo.700">{claim.costPool.name}</Link>
+                </DD>
+                <DT>Rahan lähde</DT>
+                <DD>{sourcesOfMoney[claim.sourceOfMoney]}</DD>
+                <DT>Luotu</DT>
+                <DD>{formatDateTime(claim.created)}</DD>
+                <DT>Muokattu</DT>
+                <DD>{claim.modified ? formatDateTime(claim.modified) : '-'}</DD>
+                <DT>Lisätiedot</DT>
+                <DD>{claim.details || '-'}</DD>
+            </DL>
+            <Divider my={6} />
+            <Heading as="h3" size="md" mb={6}>
+                Kuitit
+            </Heading>
+            <Stack spacing={8} direction="row" flexWrap="wrap">
+                {claim.receipts.map((receipt) => (
+                    <Box
+                        key={receipt.id}
+                        width="xs"
+                        rounded="lg"
+                        border="1px"
+                        borderColor="gray.200"
+                        p={3}
+                        mb={4}
+                    >
+                        <Image
+                            mb={3}
+                            rounded="md"
+                            size="full"
+                            height="200px"
+                            objectFit="cover"
+                            shadow="sm"
+                            src={`https://picsum.photos/seed/${receipt.id}/300/200`}
+                        />
+                        <Flex align="baseline">
+                            <Text fontSize="xl" fontWeight="semibold">
+                                {formatCurrency(receipt.amount)}
+                            </Text>
+                            <Text mx={2} color="gray.200">
+                                &bull;
+                            </Text>
+                            <Text flexGrow={1} color="gray.600">
+                                {formatDate(receipt.date)}
+                            </Text>
+                            <Link isExternal href={receipt.attachment}>
+                                <IconButton
+                                    size="sm"
+                                    icon="attachment"
+                                    variantColor="indigo"
+                                    variant="outline"
+                                />
+                            </Link>
+                        </Flex>
+                    </Box>
                 ))}
-            </div>
-        </Container>
-    );
-};
+            </Stack>
+        </React.Fragment>
+    ) : null;
 
-const CostClaim = props => {
-    const { match: { params: { id } }, location } = props;
-    const [claim, setClaim] = useState(false);
+const CostClaim = (props) => {
+    const id = props.match.params.id;
 
-    useEffect(() => {
-        fetch('http://localhost:3000/costClaims/' + id)
-            .then(res => res.json())
-            .then(setClaim)
-    }, [setClaim]);
+    const [result] = useQuery({ query, variables: { id } });
+
     return (
-        <Page link="/costclaims" title={'Kulukorvaus #' + id} actions={(
-            <React.Fragment>
-                <Button color="green" style={{ marginRight: '2rem' }} className="icon">
-                    <Check />
-                </Button>
-                <Button color="red" style={{ marginRight: '2rem' }} className="icon">
-                    <X />
-                </Button>
-                <Button as={Link} to={location.pathname + '/print'} color="indigo" style={{ marginRight: '2.5rem' }} className="icon">
-                    <Printer />
-                </Button>
-                <Button as={Link} to={location.pathname + '/edit'} color="indigo">
-                    Muokkaa
-                </Button>
-            </React.Fragment>
-        )}>
-            {claim ? <ClaimData claim={claim} /> : <div className="loading loading-lg" />}
-        </Page>
+        <Box maxWidth="800px" margin="auto">
+            <Button
+                as={RouterLink}
+                leftIcon="arrow-back"
+                variant="link"
+                variantColor="indigo"
+                to="/costClaims"
+                my={4}
+            >
+                Takaisin
+            </Button>
+            {result.fetching ? (
+                <Spinner color="indigo.500" size="xl" display="block" />
+            ) : null}
+            <ErrorDisplay error={result.error} />
+            {result.data ? renderClaim(result.data.costClaim) : null}
+        </Box>
     );
 };
 
 export default CostClaim;
-
