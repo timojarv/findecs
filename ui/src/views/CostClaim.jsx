@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import React from "react";
+import { Link as RouterLink } from "react-router-dom";
 import {
     Box,
     Heading,
@@ -13,13 +13,15 @@ import {
     Link,
     Badge,
     Spinner,
-} from '@chakra-ui/core';
-import { Printer, Edit } from 'react-feather';
-import { DL, DT, DD } from '../components/DescriptionList';
-import { statuses, statusColors, sourcesOfMoney } from '../util/metadata';
-import { formatDateTime, formatCurrency, formatDate } from '../util/format';
-import { useQuery } from 'urql';
-import ErrorDisplay from '../components/ErrorDisplay';
+} from "@chakra-ui/core";
+import { Printer, Edit, Delete, Trash, Trash2 } from "react-feather";
+import { DL, DT, DD } from "../components/DescriptionList";
+import { statuses, statusColors, sourcesOfMoney } from "../util/metadata";
+import { formatDateTime, formatCurrency, formatDate } from "../util/format";
+import { APIHost } from "../util/api";
+import { useQuery } from "urql";
+import ErrorDisplay from "../components/ErrorDisplay";
+import CostClaimDelete from "../components/CostClaimDelete";
 
 const query = `
     query FetchCostClaim ($id: ID!) {
@@ -50,6 +52,7 @@ const query = `
                 id
                 date
                 amount
+                attachment
             }
             total
         }
@@ -89,7 +92,7 @@ const renderClaim = (claim) =>
                     target="_blank"
                     to={`/costClaims/${claim.id}/print`}
                 >
-                    <Text display={['none', 'inline-block']} mr={2}>
+                    <Text display={["none", "inline-block"]} mr={2}>
                         Tulosta
                     </Text>
                     <Printer size="1em" />
@@ -100,12 +103,28 @@ const renderClaim = (claim) =>
                     variant="outline"
                     variantColor="indigo"
                     size="sm"
+                    as={RouterLink}
+                    to={`/costClaims/${claim.id}/edit`}
                 >
-                    <Text display={['none', 'inline-block']} mr={2}>
+                    <Text display={["none", "inline-block"]} mr={2}>
                         Muokkaa
                     </Text>
                     <Edit size="1em" />
                 </Button>
+                <CostClaimDelete id={claim.id}>
+                    <Button
+                        flexShrink={0}
+                        ml={4}
+                        variant="outline"
+                        variantColor="red"
+                        size="sm"
+                    >
+                        <Text display={["none", "inline-block"]} mr={2}>
+                            Poista
+                        </Text>
+                        <Trash2 size="1em" />
+                    </Button>
+                </CostClaimDelete>
             </Flex>
             <DL>
                 <DT>Summa</DT>
@@ -125,9 +144,9 @@ const renderClaim = (claim) =>
                 <DT>Luotu</DT>
                 <DD>{formatDateTime(claim.created)}</DD>
                 <DT>Muokattu</DT>
-                <DD>{claim.modified ? formatDateTime(claim.modified) : '-'}</DD>
+                <DD>{claim.modified ? formatDateTime(claim.modified) : "-"}</DD>
                 <DT>Lisätiedot</DT>
-                <DD>{claim.details || '-'}</DD>
+                <DD>{claim.details || "-"}</DD>
             </DL>
             <Divider my={6} />
             <Heading as="h3" size="md" mb={6}>
@@ -137,10 +156,10 @@ const renderClaim = (claim) =>
                 {claim.receipts.map((receipt) => (
                     <Box
                         key={receipt.id}
-                        width="xs"
+                        width="sm"
                         rounded="lg"
                         border="1px"
-                        borderColor="gray.200"
+                        borderColor="gray.300"
                         p={3}
                         mb={4}
                     >
@@ -148,10 +167,10 @@ const renderClaim = (claim) =>
                             mb={3}
                             rounded="md"
                             size="full"
-                            height="200px"
+                            height="260px"
                             objectFit="cover"
                             shadow="sm"
-                            src={`https://picsum.photos/seed/${receipt.id}/300/200`}
+                            src={`${APIHost}/upload/receipts/${receipt.attachment}`}
                         />
                         <Flex align="baseline">
                             <Text fontSize="xl" fontWeight="semibold">
@@ -163,7 +182,10 @@ const renderClaim = (claim) =>
                             <Text flexGrow={1} color="gray.600">
                                 {formatDate(receipt.date)}
                             </Text>
-                            <Link isExternal href={receipt.attachment}>
+                            <Link
+                                isExternal
+                                href={`${APIHost}/upload/receipts/${receipt.attachment}`}
+                            >
                                 <IconButton
                                     size="sm"
                                     icon="attachment"

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import React from "react";
+import { Link as RouterLink } from "react-router-dom";
 import {
     Heading,
     Box,
@@ -15,8 +15,8 @@ import {
     Button,
     Flex,
     FormErrorMessage,
-} from '@chakra-ui/core';
-import { roles } from '../util/metadata';
+} from "@chakra-ui/core";
+import { roles } from "../util/metadata";
 
 const NewUser = (props) => {
     const { isOpen, onToggle } = useDisclosure();
@@ -29,7 +29,7 @@ const NewUser = (props) => {
                 <Input type="text" name="name" />
                 <FormErrorMessage>Nimi on jo käytössä</FormErrorMessage>
             </FormControl>
-            <FormControl isInvalid isRequired mb={4}>
+            <FormControl isRequired mb={4}>
                 <FormLabel htmlFor="email">Sähköposti</FormLabel>
                 <Input type="email" name="email" />
                 <FormErrorMessage>Sähköposti ei kelpaa</FormErrorMessage>
@@ -46,14 +46,14 @@ const NewUser = (props) => {
                 <FormLabel htmlFor="password">Salasana</FormLabel>
                 <InputGroup>
                     <Input
-                        type={isOpen ? 'text' : 'password'}
+                        type={isOpen ? "text" : "password"}
                         name="password"
                     />
                     <InputRightElement>
                         <IconButton
                             icon="view"
                             variant="ghost"
-                            variantColor={isOpen ? 'indigo' : 'gray'}
+                            variantColor={isOpen ? "indigo" : "gray"}
                             onClick={onToggle}
                         />
                     </InputRightElement>
@@ -71,7 +71,7 @@ const NewUser = (props) => {
                     leftIcon="arrow-back"
                     mr={2}
                 >
-                    Takaisin
+                    Peruuta
                 </Button>
                 <Button variantColor="indigo">Luo käyttäjä</Button>
             </Flex>

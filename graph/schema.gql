@@ -19,6 +19,7 @@ enum UserRole {
 
 scalar Date
 scalar DateTime
+scalar Upload
 
 type User {
     id: ID!
@@ -26,6 +27,7 @@ type User {
     email: String!
     signature: String
     role: UserRole!
+    hasPassword: Boolean!
 }
 
 input UserInput {
@@ -41,9 +43,10 @@ type Receipt {
 }
 
 input ReceiptInput {
+    id: ID
     date: Date!
     amount: Float!
-    attachment: String!
+    file: Upload
 }
 
 type CostPool {
@@ -82,19 +85,45 @@ input CostClaimInput {
     sourceOfMoney: SourceOfMoney!
 }
 
+type Contact {
+    id: ID!
+    name: String!
+    address: String!
+}
+
+input ContactInput {
+    name: String!
+    address: String
+}
+
 type Query {
+    costClaims(limit: Int = 20, offset: Int! = 0): [CostClaim!]!
     costClaim(id: ID!): CostClaim
-    costClaims: [CostClaim!]!
     user(id: ID!): User
-    users: [User!]!
-    costPools: [CostPool!]!
+    users(limit: Int = 20, offset: Int! = 0): [User!]!
+    costPools(limit: Int = 20, offset: Int! = 0): [CostPool!]!
+    contacts(limit: Int = 20, offset: Int! = 0): [Contact!]!
+    accessToken(email: String!, password: String!): String!
 }
 
 type Mutation {
     createUser(user: UserInput!): User!
+
     createCostPool(costPool: CostPoolInput!): CostPool!
+    updateCostPool(id: ID!, costPool: CostPoolInput!): CostPool!
+    deleteCostPool(id: ID!): ID!
+
     createCostClaim(
         costClaim: CostClaimInput!
         receipts: [ReceiptInput!]!
     ): CostClaim!
+    updateCostClaim(
+        id: ID!
+        costClaim: CostClaimInput!
+        receipts: [ReceiptInput!]!
+    ): CostClaim!
+    deleteCostClaim(id: ID!): ID!
+    setCostClaimStatus(id: ID!, status: Status!): CostClaim!
+
+    createContact(contact: ContactInput!): Contact!
 }

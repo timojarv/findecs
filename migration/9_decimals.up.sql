@@ -1,0 +1,3 @@
+ALTER TABLE receipts MODIFY amount DECIMAL(18, 2);
+ALTER TABLE receipts MODIFY date DATE;
+ALTER TABLE cost_pools MODIFY budget DECIMAL(18, 2);

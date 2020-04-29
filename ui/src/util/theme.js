@@ -3,6 +3,11 @@ import { theme } from '@chakra-ui/core';
 export default {
     ...theme,
     breakpoints: ['48em', '72em'],
+    fonts: {
+        ...theme.fonts,
+        heading: '"Open Sans", ' + theme.fonts.heading,
+        body: '"Open Sans", ' + theme.fonts.body,
+    },
     colors: {
         ...theme.colors,
         red: {

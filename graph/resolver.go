@@ -15,4 +15,5 @@ import (
 type Resolver struct {
 	DB      *sqlx.DB
 	ShortID *shortid.Shortid
+	JWTKey  []byte
 }

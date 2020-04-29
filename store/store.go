@@ -1,6 +1,9 @@
 package store
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/jmoiron/sqlx"
 	// Import driver
 	_ "github.com/go-sql-driver/mysql"
@@ -18,7 +21,8 @@ var DB *sqlx.DB
 
 func init() {
 	var err error
-	DB, err = sqlx.Connect("mysql", "findecs:S2GmVF8UH9wjFwaA@/findecs?multiStatements=true")
+	dsn := fmt.Sprintf("findecs:%s@/findecs?multiStatements=true", os.Getenv("MYSQL_PASSWORD"))
+	DB, err = sqlx.Connect("mysql", dsn)
 	if err != nil {
 		logrus.Fatal(err)
 	}

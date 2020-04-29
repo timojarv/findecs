@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useContext } from "react";
+import { Link, Redirect } from "react-router-dom";
 
 import {
     Flex,
@@ -10,8 +10,10 @@ import {
     MenuItem,
     Button,
     Image,
-} from '@chakra-ui/core';
-import { Menu as Hamburger, X } from 'react-feather';
+} from "@chakra-ui/core";
+import { Menu as Hamburger, X } from "react-feather";
+import FindecsLogo from "../resources/logo.svg";
+import { AuthContext } from "../util/auth";
 
 const NavItem = (props) => (
     <Button variant="ghost" to={props.to} as={Link} mt={[1, 0]}>
@@ -20,8 +22,20 @@ const NavItem = (props) => (
 );
 
 const Navigation = (props) => {
+    const path = props.location.pathname;
+
     const [open, setOpen] = useState(false);
     const handleToggle = () => setOpen(!open);
+
+    const user = useContext(AuthContext);
+
+    if (path.endsWith("print") || path.endsWith("login")) {
+        return null;
+    }
+
+    if (!user.name && !props.isAuthenticating) {
+        return <Redirect to="/login" />;
+    }
 
     return (
         <Flex
@@ -29,33 +43,30 @@ const Navigation = (props) => {
             align="center"
             justify="space-between"
             wrap="wrap"
-            py={3}
+            py={2}
             px={[3, 8]}
             borderBottom="1px"
             borderColor="gray.200"
             {...props}
         >
             <Flex align="center" mx={3}>
-                <Image
-                    src="https://emojipedia-us.s3.dualstack.us-west-1.amazonaws.com/thumbs/120/google/241/money-with-wings_1f4b8.png"
-                    size={10}
-                />
+                <Image as={FindecsLogo} size={12} />
             </Flex>
 
             <Box
                 cursor="pointer"
-                display={['block', 'none']}
+                display={["block", "none"]}
                 onClick={handleToggle}
             >
                 {open ? <X /> : <Hamburger />}
             </Box>
 
             <Box
-                display={[open ? 'flex' : 'none', 'flex']}
-                width={['full', 'auto']}
+                display={[open ? "flex" : "none", "flex"]}
+                width={["full", "auto"]}
                 alignItems="center"
                 flexGrow={1}
-                flexDirection={['column', 'row']}
+                flexDirection={["column", "row"]}
             >
                 <NavItem to="/costClaims">Kulukorvaukset</NavItem>
                 <NavItem to="/purchaseInvoices">Ostolaskut</NavItem>
@@ -73,13 +84,19 @@ const Navigation = (props) => {
                         <MenuItem as={Link} to="/costPools">
                             Kustannuspaikat
                         </MenuItem>
+                        <MenuItem as={Link} to="/contacts">
+                            Yhteystiedot
+                        </MenuItem>
                         <MenuItem as={Link} to="/users">
                             Käyttäjät
+                        </MenuItem>
+                        <MenuItem as={Link} to="/import">
+                            Tuo tietoja
                         </MenuItem>
                     </MenuList>
                 </Menu>
             </Box>
-            <Box margin="auto" display={[open ? 'block' : 'none', 'flex']}>
+            <Box margin="auto" display={[open ? "block" : "none", "flex"]}>
                 <Menu>
                     <MenuButton
                         as={Button}
@@ -87,13 +104,13 @@ const Navigation = (props) => {
                         variant="ghost"
                         rightIcon="chevron-down"
                     >
-                        Timo Järventausta
+                        {user.name || "Tuntematon"}
                     </MenuButton>
                     <MenuList>
                         <MenuItem as={Link} to="/settings">
                             Asetukset
                         </MenuItem>
-                        <MenuItem as={Link} to="/logout">
+                        <MenuItem onClick={() => user.setToken(null)}>
                             Kirjaudu ulos
                         </MenuItem>
                     </MenuList>

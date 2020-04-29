@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
     Heading,
     Box,
@@ -10,7 +10,6 @@ import {
     ModalOverlay,
     ModalContent,
     ModalHeader,
-    ModalCloseButton,
     ModalBody,
     FormControl,
     FormLabel,
@@ -19,10 +18,11 @@ import {
     InputRightAddon,
     Flex,
     useToast,
-} from '@chakra-ui/core';
-import { useQuery, useMutation } from 'urql';
-import { useForm } from 'react-hook-form';
-import ErrorDisplay from '../components/ErrorDisplay';
+    Link,
+} from "@chakra-ui/core";
+import { useQuery, useMutation } from "urql";
+import { useForm } from "react-hook-form";
+import ErrorDisplay from "../components/ErrorDisplay";
 import {
     TableContainer,
     Table,
@@ -31,8 +31,8 @@ import {
     TH,
     TBody,
     TD,
-} from '../components/Table';
-import { formatCurrency } from '../util/format';
+} from "../components/Table";
+import { formatCurrency } from "../util/format";
 
 const query = `
     query FetchCostPools {
@@ -71,7 +71,9 @@ const renderCostPools = (pools) => (
             <TBody>
                 {(pools || []).map((pool) => (
                     <TR key={pool.id}>
-                        <TD fontWeight="semibold">{pool.name}</TD>
+                        <TD>
+                            <Link color="indigo.700">{pool.name}</Link>
+                        </TD>
                         <TD textAlign="right">{formatCurrency(pool.budget)}</TD>
                         <TD textAlign="right">{formatCurrency(pool.total)}</TD>
                         <TD textAlign="right">
@@ -102,7 +104,7 @@ const renderCostPools = (pools) => (
 );
 
 const CostPools = (props) => {
-    const [result, reFetch] = useQuery({ query });
+    const [result, refetch] = useQuery({ query });
     const [creation, createCostPool] = useMutation(mutation);
     const toast = useToast();
     const { isOpen, onOpen, onClose } = useDisclosure();
@@ -113,12 +115,12 @@ const CostPools = (props) => {
         createCostPool({ costPool: data }).then((res) => {
             if (!res.error) {
                 onClose();
-                reFetch();
+                refetch();
                 toast({
-                    title: 'Kustannuspaikka luotu!',
-                    status: 'success',
+                    title: "Kustannuspaikka luotu!",
+                    status: "success",
                     duration: 2500,
-                    position: 'top',
+                    position: "top",
                 });
             }
         });
@@ -126,7 +128,9 @@ const CostPools = (props) => {
 
     return (
         <Box maxWidth="800px" margin="auto" pt={8}>
-            <Heading>Kustannuspaikat</Heading>
+            <Heading as="h2" size="lg">
+                Kustannuspaikat
+            </Heading>
             <Button
                 leftIcon="add"
                 variantColor="indigo"
@@ -188,7 +192,7 @@ const CostPools = (props) => {
                                 <Button
                                     type="submit"
                                     variantColor="indigo"
-                                    isLoading={mutation.fetching}
+                                    isLoading={creation.fetching}
                                 >
                                     Luo kustannuspaikka
                                 </Button>

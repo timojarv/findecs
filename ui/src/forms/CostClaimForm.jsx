@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import produce from 'immer';
+import React, { useState, useEffect } from "react";
+import * as yup from "yup";
 import {
     FormControl,
     FormLabel,
@@ -7,9 +7,7 @@ import {
     Select,
     RadioGroup,
     Radio,
-    Code,
     Stack,
-    InputRightElement,
     InputGroup,
     Heading,
     IconButton,
@@ -20,56 +18,109 @@ import {
     PopoverContent,
     FormHelperText,
     Button,
-} from '@chakra-ui/core';
-import { useQuery } from 'urql';
-import { sourcesOfMoney } from '../util/metadata';
-import FileInput from '../components/FileInput';
-import { useForm } from 'react-hook-form';
+    Textarea,
+    FormErrorMessage,
+    Code,
+} from "@chakra-ui/core";
+import { useQuery } from "urql";
+import { sourcesOfMoney } from "../util/metadata";
+import FileInput from "../components/FileInput";
+import { useForm, useFieldArray } from "react-hook-form";
+import { APIHost } from "../util/api";
 
 const query = `
     query {
-        costPools {
+        costPools(limit: null) {
             id
             name
         }
     }
 `;
 
+const schema = yup.object().shape({
+    description: yup.string().required(),
+    costPool: yup.string().required(),
+    sourceOfMoney: yup.string().required(),
+    details: yup.string(),
+    receipts: yup
+        .array()
+        .of(
+            yup.object().shape({
+                date: yup.string().required(),
+                amount: yup.number().required().min(0.01),
+                id: yup.string(),
+                file: yup.object(),
+            })
+        )
+        .required()
+        .min(1),
+});
+
 const CostClaimForm = (props) => {
+    const { isLoading, isSubmitting, onSubmit, data } = props;
+
     const [result] = useQuery({ query });
+    const {
+        register,
+        errors,
+        handleSubmit,
+        clearError,
+        reset,
+        control,
+    } = useForm({ validationSchema: schema });
 
-    const [files, setFiles] = useState({});
+    const { fields, append, remove } = useFieldArray({
+        control,
+        name: "receipts",
+        keyName: "key",
+    });
 
-    const { register, errors, handleSubmit } = useForm();
+    useEffect(() => {
+        if (!data) return;
+        reset({
+            ...data,
+            author: data.author.id,
+            costPool: data.costPool.id,
+        });
+    }, [data, reset, append]);
 
     const costPools = result.data ? result.data.costPools : [];
 
-    const handleAddFiles = (fs) => {
-        setFiles(
-            produce(files, (draft) => {
-                fs.filter((f) => !files[f.path]).forEach(
-                    (f) => (draft[f.path] = f)
-                );
-            })
-        );
+    const handleAddFiles = (files) => {
+        files.forEach((file) => {
+            append({
+                attachment: file.name,
+                file,
+            });
+        });
+
+        clearError("receipts");
     };
 
-    const handleDeleteFile = (path) => {
-        setFiles(
-            produce(files, (draft) => {
-                delete draft[path];
-            })
-        );
+    const handleDeleteFile = (index) => {
+        remove(index);
     };
 
     return (
         <form
             onSubmit={handleSubmit((form) => {
-                if (typeof props.onSubmit === 'function')
-                    props.onSubmit({ ...form, files });
+                console.log(form);
+                if (typeof props.onSubmit === "function")
+                    onSubmit({
+                        ...form,
+                        receipts: form.receipts.map((receipt, index) => ({
+                            ...receipt,
+                            file: fields[index].file,
+                        })),
+                    });
             })}
         >
-            <FormControl isRequired isInvalid={!!errors.description} mb={4}>
+            <FormControl
+                isDisabled={isLoading}
+                isRequired
+                isInvalid={!!errors.description}
+                mb={4}
+            >
                 <FormLabel htmlFor="description">Kuvaus</FormLabel>
                 <Input
                     name="description"
@@ -78,7 +129,12 @@ const CostClaimForm = (props) => {
                 />
                 <FormHelperText>Lyhyt kuvaus kulukorvauksesta</FormHelperText>
             </FormControl>
-            <FormControl isRequired isInvalid={!!errors.costPool} mb={4}>
+            <FormControl
+                isDisabled={isLoading}
+                isRequired
+                isInvalid={!!errors.costPool}
+                mb={4}
+            >
                 <FormLabel htmlFor="costPool">Kustannuspaikka</FormLabel>
                 <Select
                     name="costPool"
@@ -92,11 +148,17 @@ const CostClaimForm = (props) => {
                     ))}
                 </Select>
             </FormControl>
-            <FormControl isRequired isInvalid={!!errors.sourceOfMoney} mb={4}>
+            <FormControl
+                isDisabled={isLoading}
+                isRequired
+                isInvalid={!!errors.sourceOfMoney}
+                mb={4}
+            >
                 <FormLabel htmlFor="sourceOfMoney">Rahan lähde</FormLabel>
                 <RadioGroup name="sourceOfMoney" defaultValue="ownAccount">
                     {Object.entries(sourcesOfMoney).map(([key, label]) => (
                         <Radio
+                            isDisabled={isLoading}
                             key={key}
                             value={key}
                             ref={register({ required: true })}
@@ -106,20 +168,40 @@ const CostClaimForm = (props) => {
                     ))}
                 </RadioGroup>
             </FormControl>
-            <Heading as="h3" size="lg" my={6}>
-                Kuitit
-            </Heading>
-            {Object.values(files).map((file, index) => (
+            <FormControl isDisabled={isLoading}>
+                <FormLabel>Lisätietoja</FormLabel>
+                <Textarea name="details" ref={register} />
+            </FormControl>
+            <FormControl
+                isInvalid={errors.receipts && !Array.isArray(errors.receipts)}
+            >
+                <Heading as="h3" size="lg" my={6}>
+                    Kuitit
+                </Heading>
+                <FormErrorMessage>Lisää vähintään yksi kuitti</FormErrorMessage>
+            </FormControl>
+            {fields.map((receipt, index) => (
                 <Stack
-                    key={file.path}
+                    key={receipt.key}
                     isInline
                     alignItems="flex-end"
                     spacing={4}
                     my={4}
                 >
+                    <Input
+                        name={`receipts[${index}].id`}
+                        ref={register()}
+                        value={receipt.id}
+                        display="none"
+                        isReadOnly
+                    />
                     <FormControl
+                        flexGrow={1}
                         isRequired
-                        isInvalid={!!errors[`receipts[${index}].date`]}
+                        isInvalid={
+                            errors.receipts &&
+                            !!(errors.receipts[index] || {}).date
+                        }
                     >
                         <FormLabel htmlFor={`receipts[${index}].date`}>
                             Päiväys
@@ -127,12 +209,17 @@ const CostClaimForm = (props) => {
                         <Input
                             name={`receipts[${index}].date`}
                             type="date"
+                            defaultValue={receipt.date}
                             ref={register({ required: true })}
                         />
                     </FormControl>
                     <FormControl
+                        flexGrow={1}
                         isRequired
-                        isInvalid={!!errors[`receipts[${index}].amount`]}
+                        isInvalid={
+                            errors.receipts &&
+                            !!(errors.receipts[index] || {}).amount
+                        }
                     >
                         <FormLabel htmlFor={`receipts[${index}].amount`}>
                             Summa
@@ -140,27 +227,17 @@ const CostClaimForm = (props) => {
                         <InputGroup>
                             <Input
                                 name={`receipts[${index}].amount`}
-                                type="number"
-                                step="0.01"
                                 borderBottomRightRadius={0}
                                 borderTopRightRadius={0}
                                 ref={register({ required: true })}
+                                type="number"
+                                step="0.01"
+                                defaultValue={receipt.amount}
                             />
                             <InputRightAddon>€</InputRightAddon>
                         </InputGroup>
                     </FormControl>
-                    <FormControl flexGrow={1}>
-                        <FormLabel htmlFor={`receipts[${index}].fileName`}>
-                            Tiedosto
-                        </FormLabel>
-                        <Input
-                            isReadOnly
-                            name={`receipts[${index}].fileName`}
-                            value={file.name}
-                            ref={register({ required: true })}
-                        />
-                    </FormControl>
-                    <Popover>
+                    <Popover placement="left">
                         <PopoverTrigger>
                             <IconButton
                                 mr={4}
@@ -179,21 +256,36 @@ const CostClaimForm = (props) => {
                         >
                             <Image
                                 objectFit="cover"
-                                src={URL.createObjectURL(file)}
-                                size="sm"
+                                src={
+                                    receipt.file
+                                        ? URL.createObjectURL(receipt.file)
+                                        : `${APIHost}/upload/receipts/${receipt.attachment}`
+                                }
+                                maxWidth="md"
+                                maxHeight="md"
                             />
                         </PopoverContent>
                     </Popover>
                     <IconButton
-                        onClick={() => handleDeleteFile(file.path)}
+                        onClick={() => handleDeleteFile(index)}
                         icon="delete"
                         variantColor="red"
                     />
                 </Stack>
             ))}
-            <FileInput my={8} onChange={handleAddFiles} />
-            <Button type="submit" variantColor="indigo" float="right">
-                Luo kulukorvaus
+            <FileInput
+                isDisabled={isLoading}
+                my={8}
+                onChange={handleAddFiles}
+                accept="image/*"
+            />
+            <Button
+                isLoading={isSubmitting}
+                type="submit"
+                variantColor="indigo"
+                float="right"
+            >
+                {data ? "Tallenna" : "Luo kulukorvaus"}
             </Button>
         </form>
     );

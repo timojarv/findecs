@@ -21,11 +21,11 @@ export const sourcesOfMoney = {
 export const roles = {
     basic: {
         color: 'gray',
-        label: 'Peruskäyttäjä',
+        label: 'Perus',
     },
     admin: {
         color: 'teal',
-        label: 'Ylläpitäjä',
+        label: 'Admin',
     },
     root: {
         color: 'grape',

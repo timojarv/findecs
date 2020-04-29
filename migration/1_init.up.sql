@@ -36,4 +36,5 @@ CREATE TABLE receipts (
     attachment VARCHAR(256) NOT NULL,
     cost_claim VARCHAR(64) NOT NULL,
     FOREIGN KEY (cost_claim) REFERENCES cost_claims (id)
+    ON DELETE CASCADE ON UPDATE CASCADE
 );

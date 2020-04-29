@@ -1,26 +1,31 @@
-import React from 'react';
-import ReactDOM from 'react-dom';
-import { ThemeProvider, CSSReset } from '@chakra-ui/core';
+import React from "react";
+import ReactDOM from "react-dom";
+import { ThemeProvider, CSSReset } from "@chakra-ui/core";
 
-import App from './App';
-import theme from './util/theme';
-import schema from './util/schema.json';
-import { enableMapSet } from 'immer';
-import { createClient, dedupExchange, fetchExchange, Provider } from 'urql';
-import { cacheExchange } from '@urql/exchange-graphcache';
+import App from "./App";
+import theme from "./util/theme";
+import schema from "./util/schema.json";
+import { APIHost } from "./util/api";
+import { enableMapSet } from "immer";
+import { createClient, dedupExchange, Provider } from "urql";
+import { cacheExchange } from "@urql/exchange-graphcache";
+import { multipartFetchExchange } from "@urql/exchange-multipart-fetch";
 
 enableMapSet();
 
 const client = createClient({
-    url: 'http://localhost:8080/query',
+    url: `${APIHost}/query`,
     exchanges: [
         dedupExchange,
         cacheExchange({
             schema,
+            keys: {
+                User: ({ id }) => id || null,
+            },
         }),
-        fetchExchange,
+        multipartFetchExchange,
     ],
-    requestPolicy: 'cache-and-network',
+    requestPolicy: "cache-and-network",
 });
 
 ReactDOM.render(
@@ -30,5 +35,5 @@ ReactDOM.render(
             <App />
         </Provider>
     </ThemeProvider>,
-    document.querySelector('#root')
+    document.querySelector("#root")
 );

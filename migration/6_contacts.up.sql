@@ -1,0 +1,5 @@
+CREATE TABLE contacts (
+    id VARCHAR(64) PRIMARY KEY,
+    name VARCHAR(256) UNIQUE NOT NULL,
+    address TEXT NOT NULL DEFAULT ''
+);

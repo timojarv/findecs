@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
-import produce from 'immer';
+import React, { useState } from "react";
+import { Link as RouterLink } from "react-router-dom";
+import produce from "immer";
 import {
     Box,
     Heading,
@@ -15,7 +15,7 @@ import {
     MenuItem,
     Text,
     Spinner,
-} from '@chakra-ui/core';
+} from "@chakra-ui/core";
 import {
     TableContainer,
     Table,
@@ -24,15 +24,16 @@ import {
     TH,
     TBody,
     TD,
-} from '../components/Table';
-import { MoreVertical } from 'react-feather';
-import { statuses, statusColors } from '../util/metadata';
-import { formatCurrency, formatDate } from '../util/format';
-import { useQuery } from 'urql';
-import ErrorDisplay from '../components/ErrorDisplay';
+} from "../components/Table";
+import { MoreVertical } from "react-feather";
+import { statuses, statusColors } from "../util/metadata";
+import { formatCurrency, formatDate } from "../util/format";
+import { useQuery } from "urql";
+import ErrorDisplay from "../components/ErrorDisplay";
+import CostClaimDelete from "../components/CostClaimDelete";
 
 const query = `
-    query {
+    query FetchCostClaims {
         costClaims {
             id
             description
@@ -49,7 +50,7 @@ const query = `
 
 const renderClaim = (selected, handleSelect) => (claim) => (
     <TR key={claim.id}>
-        <TD display={['none', 'table-cell']} pr={[1, 1]} pl={[4, 6]}>
+        <TD display={["none", "table-cell"]} pr={[1, 1]} pl={[4, 6]}>
             <Flex py={4} align="center">
                 <Checkbox
                     isChecked={selected.has(claim.id)}
@@ -63,19 +64,19 @@ const renderClaim = (selected, handleSelect) => (claim) => (
             <Link
                 as={RouterLink}
                 to={`/costClaims/${claim.id}`}
-                color="indigo.600"
+                color="indigo.700"
                 py={2}
                 display="block"
             >
                 {claim.description}
             </Link>
         </TD>
-        <TD display={['none', 'table-cell']}>
+        <TD display={["none", "table-cell"]}>
             <Link
                 whiteSpace="nowrap"
                 as={RouterLink}
                 to="/users/timojarv"
-                color="indigo.600"
+                color="indigo.700"
             >
                 {claim.author.name}
             </Link>
@@ -91,10 +92,10 @@ const renderClaim = (selected, handleSelect) => (claim) => (
                 {statuses[claim.status]}
             </Badge>
         </TD>
-        <TD display={['none', 'table-cell']} width={8}>
+        <TD display={["none", "table-cell"]} width={8}>
             <Menu>
                 <MenuButton
-                    color="gray.500"
+                    color="gray.400"
                     as={Button}
                     variant="ghost"
                     size="xs"
@@ -103,8 +104,7 @@ const renderClaim = (selected, handleSelect) => (claim) => (
                 </MenuButton>
                 <MenuList>
                     <MenuItem>Hyväksy</MenuItem>
-                    <MenuItem>Muokkaa</MenuItem>
-                    <MenuItem color="red.500">Poista</MenuItem>
+                    <MenuItem>Hylkää</MenuItem>
                 </MenuList>
             </Menu>
         </TD>
@@ -144,7 +144,9 @@ const CostClaims = (props) => {
 
     return (
         <Box pt={8}>
-            <Heading as="h2">Kulukorvaukset</Heading>
+            <Heading as="h2" size="lg">
+                Kulukorvaukset
+            </Heading>
             <Flex align="center" my={6}>
                 <Button
                     as={RouterLink}
@@ -158,11 +160,11 @@ const CostClaims = (props) => {
                 {selected.size > 0 ? (
                     <Flex align="baseline">
                         <Text fontSize="sm" color="gray.700" mr={3} as="strong">
-                            Valitut:{' '}
+                            Valitut:{" "}
                         </Text>
                         <Button
                             ml={2}
-                            variant="solid"
+                            variant="outline"
                             size="sm"
                             variantColor="green"
                         >
@@ -170,19 +172,11 @@ const CostClaims = (props) => {
                         </Button>
                         <Button
                             ml={2}
-                            variant="solid"
+                            variant="outline"
                             size="sm"
                             variantColor="red"
                         >
                             Hylkää
-                        </Button>
-                        <Button
-                            ml={2}
-                            variant="solid"
-                            size="sm"
-                            variantColor="red"
-                        >
-                            Poista
                         </Button>
                     </Flex>
                 ) : null}
@@ -195,15 +189,17 @@ const CostClaims = (props) => {
                         <THead>
                             <TR>
                                 <TH
-                                    display={['none', 'table-cell']}
+                                    display={["none", "table-cell"]}
                                     pl={[4, 6]}
                                     pr={[0, 0]}
+                                    textAlign="left"
                                 >
                                     <Checkbox
                                         size="lg"
                                         variantColor="indigo"
                                         isChecked={
-                                            selected.size === claims.length
+                                            selected.size === claims.length &&
+                                            selected.size > 0
                                         }
                                         isIndeterminate={
                                             selected.size < claims.length &&
@@ -214,7 +210,7 @@ const CostClaims = (props) => {
                                 </TH>
                                 <TH textAlign="left">Kuvaus</TH>
                                 <TH
-                                    display={['none', 'table-cell']}
+                                    display={["none", "table-cell"]}
                                     textAlign="left"
                                 >
                                     Tekijä
@@ -222,7 +218,7 @@ const CostClaims = (props) => {
                                 <TH textAlign="left">Päiväys</TH>
                                 <TH textAlign="right">Summa</TH>
                                 <TH textAlign="right">Tila</TH>
-                                <TH display={['none', 'table-cell']}></TH>
+                                <TH display={["none", "table-cell"]}></TH>
                             </TR>
                         </THead>
                         <TBody>

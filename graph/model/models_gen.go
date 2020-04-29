@@ -6,7 +6,20 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+
+	"github.com/99designs/gqlgen/graphql"
 )
+
+type Contact struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Address string `json:"address"`
+}
+
+type ContactInput struct {
+	Name    string  `json:"name"`
+	Address *string `json:"address"`
+}
 
 type CostClaimInput struct {
 	Description   string        `json:"description"`
@@ -29,17 +42,10 @@ type Receipt struct {
 }
 
 type ReceiptInput struct {
-	Date       string  `json:"date"`
-	Amount     float64 `json:"amount"`
-	Attachment string  `json:"attachment"`
-}
-
-type User struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"`
-	Email     string   `json:"email"`
-	Signature *string  `json:"signature"`
-	Role      UserRole `json:"role"`
+	ID     *string         `json:"id"`
+	Date   string          `json:"date"`
+	Amount float64         `json:"amount"`
+	File   *graphql.Upload `json:"file"`
 }
 
 type UserInput struct {

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import React from "react";
+import { Link as RouterLink } from "react-router-dom";
 import {
     Box,
     Heading,
@@ -10,10 +10,10 @@ import {
     Button,
     Flex,
     IconButton,
-} from '@chakra-ui/core';
-import { useQuery } from 'urql';
-import ErrorDisplay from '../components/ErrorDisplay';
-import { roles } from '../util/metadata';
+} from "@chakra-ui/core";
+import { useQuery } from "urql";
+import ErrorDisplay from "../components/ErrorDisplay";
+import { roles } from "../util/metadata";
 
 const query = `
     query {
@@ -23,6 +23,7 @@ const query = `
             email
             signature
             role
+            hasPassword
         }
     }
 `;
@@ -37,7 +38,15 @@ const Problem = ({ when, children }) =>
         </Text>
     ) : null;
 
-const UserCard = ({ id, name, email, role, signature, ...props }) => (
+const UserCard = ({
+    id,
+    name,
+    email,
+    role,
+    signature,
+    hasPassword,
+    ...props
+}) => (
     <Flex
         py={2}
         px={4}
@@ -50,7 +59,7 @@ const UserCard = ({ id, name, email, role, signature, ...props }) => (
         <Box flexGrow={1}>
             <Text as="div" fontWeight="bold">
                 {name}
-                {role !== 'basic' ? (
+                {role !== "basic" ? (
                     <Badge variantColor={roles[role].color} ml={2}>
                         {roles[role].label}
                     </Badge>
@@ -59,6 +68,7 @@ const UserCard = ({ id, name, email, role, signature, ...props }) => (
             <Text mt={1} fontSize="sm">
                 {email}
                 <Problem when={!signature}>Ei allekirjoitusta</Problem>
+                <Problem when={!hasPassword}>Ei salasanaa</Problem>
             </Text>
         </Box>
         <IconButton icon="edit" variant="ghost" variantColor="indigo" />
