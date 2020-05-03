@@ -15,7 +15,6 @@ import {
 import { useMutation } from "urql";
 import { useForm } from "react-hook-form";
 import FindecsLogo from "../resources/logo.svg";
-import { Redirect } from "react-router-dom";
 
 const mutation = `
     mutation Login($email: String!, $password: String!) {
