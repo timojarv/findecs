@@ -29,7 +29,7 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { APIHost } from "../util/api";
 
 const query = `
-    query {
+    query FetchCostPools {
         costPools(limit: null) {
             id
             name
@@ -104,15 +104,13 @@ const CostClaimForm = (props) => {
     return (
         <form
             onSubmit={handleSubmit((form) => {
-                console.log(form);
-                if (typeof props.onSubmit === "function")
-                    onSubmit({
-                        ...form,
-                        receipts: form.receipts.map((receipt, index) => ({
-                            ...receipt,
-                            file: fields[index].file,
-                        })),
-                    });
+                onSubmit({
+                    ...form,
+                    receipts: form.receipts.map((receipt, index) => ({
+                        ...receipt,
+                        file: fields[index].file,
+                    })),
+                });
             })}
         >
             <FormControl
@@ -279,14 +277,15 @@ const CostClaimForm = (props) => {
                 onChange={handleAddFiles}
                 accept="image/*"
             />
-            <Button
-                isLoading={isSubmitting}
-                type="submit"
-                variantColor="indigo"
-                float="right"
-            >
-                {data ? "Tallenna" : "Luo kulukorvaus"}
-            </Button>
+            <FormControl textAlign="right">
+                <Button
+                    isLoading={isSubmitting}
+                    type="submit"
+                    variantColor="indigo"
+                >
+                    {data ? "Tallenna" : "Luo kulukorvaus"}
+                </Button>
+            </FormControl>
         </form>
     );
 };

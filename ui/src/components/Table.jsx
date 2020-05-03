@@ -1,5 +1,5 @@
-import React from 'react';
-import { Box } from '@chakra-ui/core';
+import React from "react";
+import { Box } from "@chakra-ui/core";
 
 export const TableContainer = (props) => (
     <Box
@@ -10,12 +10,11 @@ export const TableContainer = (props) => (
         {...props}
     />
 );
-export const Table = (props) => (
-    <Box fontSize={['xs', 'md']} as="table" width="full" {...props} />
-);
+export const Table = (props) => <Box as="table" width="full" {...props} />;
 export const THead = (props) => (
     <Box as="thead" bg="gray.50" color="gray.700" {...props} />
 );
+export const TFoot = (props) => <Box as="tfoot" {...props} />;
 export const TBody = (props) => <Box as="tbody" {...props} />;
 export const TR = (props) => <Box as="tr" verticalAlign="middle" {...props} />;
 export const TH = (props) => (

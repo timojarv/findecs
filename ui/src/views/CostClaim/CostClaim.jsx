@@ -1,5 +1,5 @@
-import React from "react";
-import { Link as RouterLink } from "react-router-dom";
+import React, { useRef } from "react";
+import { Link as RouterLink, useHistory } from "react-router-dom";
 import {
     Box,
     Heading,
@@ -13,15 +13,22 @@ import {
     Link,
     Badge,
     Spinner,
+    useDisclosure,
+    AlertDialog,
+    AlertDialogOverlay,
+    AlertDialogContent,
+    AlertDialogHeader,
+    AlertDialogBody,
+    AlertDialogFooter,
+    useToast,
 } from "@chakra-ui/core";
-import { Printer, Edit, Delete, Trash, Trash2 } from "react-feather";
-import { DL, DT, DD } from "../components/DescriptionList";
-import { statuses, statusColors, sourcesOfMoney } from "../util/metadata";
-import { formatDateTime, formatCurrency, formatDate } from "../util/format";
-import { APIHost } from "../util/api";
-import { useQuery } from "urql";
-import ErrorDisplay from "../components/ErrorDisplay";
-import CostClaimDelete from "../components/CostClaimDelete";
+import { Printer, Edit, Trash2 } from "react-feather";
+import { DL, DT, DD } from "../../components/DescriptionList";
+import { statuses, statusColors, sourcesOfMoney } from "../../util/metadata";
+import { formatDateTime, formatCurrency, formatDate } from "../../util/format";
+import { APIHost } from "../../util/api";
+import { useQuery, useMutation } from "urql";
+import ErrorDisplay from "../../components/ErrorDisplay";
 
 const query = `
     query FetchCostClaim ($id: ID!) {
@@ -59,11 +66,80 @@ const query = `
     }
 `;
 
+const deleteMutation = `
+    mutation DeleteCostClaim($id: ID!) {
+        deleteCostClaim(id: $id)
+    }
+`;
+
+const CostClaimDelete = (props) => {
+    const { children, id } = props;
+
+    const { isOpen, onOpen, onClose } = useDisclosure();
+    const cancelRef = useRef();
+    const [deletion, deleteCostClaim] = useMutation(deleteMutation);
+    const toast = useToast();
+    const history = useHistory();
+
+    const handleDelete = () => {
+        deleteCostClaim({ id }).then(({ error }) => {
+            if (error) {
+                toast({
+                    status: "error",
+                    title: "Tapahtui virhe!",
+                    description: error.message,
+                    position: "top",
+                });
+            } else {
+                toast({
+                    status: "info",
+                    title: "Kulukorvaus poistettu",
+                    position: "top",
+                });
+                history.push("/costClaims");
+            }
+        });
+    };
+
+    return (
+        <React.Fragment>
+            {React.cloneElement(children, { onClick: onOpen })}
+            <AlertDialog
+                leastDestructiveRef={cancelRef}
+                isOpen={isOpen}
+                onClose={onClose}
+                preserveScrollBarGap={true}
+            >
+                <AlertDialogOverlay />
+                <AlertDialogContent rounded="md">
+                    <AlertDialogHeader>Poista kulukorvaus</AlertDialogHeader>
+                    <AlertDialogBody>
+                        Oletko varma? Toimintoa ei voi perua.
+                    </AlertDialogBody>
+                    <AlertDialogFooter>
+                        <Button ref={cancelRef} onClick={onClose}>
+                            Peruuta
+                        </Button>
+                        <Button
+                            isLoading={deletion.fetching}
+                            onClick={handleDelete}
+                            variantColor="red"
+                            ml={3}
+                        >
+                            Poista
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </React.Fragment>
+    );
+};
+
 const renderClaim = (claim) =>
     claim ? (
         <React.Fragment>
             <Flex align="baseline">
-                <Heading flexGrow={1} as="h2" size="lg">
+                <Heading flexGrow={1} as="h2">
                     {claim.description}
                 </Heading>
             </Flex>
@@ -137,7 +213,13 @@ const renderClaim = (claim) =>
                 </DD>
                 <DT>Kustannuspaikka</DT>
                 <DD>
-                    <Link color="indigo.700">{claim.costPool.name}</Link>
+                    <Link
+                        as={RouterLink}
+                        to={`/costPools/${claim.costPool.id}`}
+                        color="indigo.700"
+                    >
+                        {claim.costPool.name}
+                    </Link>
                 </DD>
                 <DT>Rahan lähde</DT>
                 <DD>{sourcesOfMoney[claim.sourceOfMoney]}</DD>
@@ -218,7 +300,7 @@ const CostClaim = (props) => {
                 Takaisin
             </Button>
             {result.fetching ? (
-                <Spinner color="indigo.500" size="xl" display="block" />
+                <Spinner color="indigo.500" display="block" />
             ) : null}
             <ErrorDisplay error={result.error} />
             {result.data ? renderClaim(result.data.costClaim) : null}

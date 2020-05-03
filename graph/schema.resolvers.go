@@ -7,17 +7,40 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
-	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/hashicorp/go-multierror"
-	"github.com/indecstty/findecs/graph/generated"
-	"github.com/indecstty/findecs/graph/model"
-	"github.com/indecstty/findecs/storage"
-	"github.com/jmoiron/sqlx"
-	log "github.com/sirupsen/logrus"
+	"github.com/timojarv/findecs/graph/generated"
+	"github.com/timojarv/findecs/graph/model"
+	"github.com/timojarv/findecs/session"
+	"github.com/timojarv/findecs/storage"
 	"golang.org/x/crypto/bcrypt"
 )
+
+func (r *contactResolver) SalesInvoices(ctx context.Context, obj *model.Contact) ([]*model.SalesInvoice, error) {
+	var invoices []*model.SalesInvoice
+
+	err := r.DB.SelectContext(ctx, &invoices, `
+		SELECT si.id, si.running_number, si.recipient, si.date, si.due_date,
+		si.status, si.details, si.payer_reference, si.contact_person
+		FROM sales_invoices si
+		WHERE si.recipient = ?
+	`, obj.ID)
+
+	return invoices, err
+}
+
+func (r *contactResolver) PurchaseInvoices(ctx context.Context, obj *model.Contact) ([]*model.PurchaseInvoice, error) {
+	var invoices []*model.PurchaseInvoice
+
+	err := r.DB.SelectContext(ctx, &invoices, `
+		SELECT pi.id, pi.sender, pi.description, pi.due_date, pi.status, pi.created,
+		pi.modified, pi.details, pi.note
+		FROM purchase_invoices pi
+		WHERE pi.sender = ?
+	`, obj.ID)
+
+	return invoices, err
+}
 
 func (r *costClaimResolver) Author(ctx context.Context, obj *model.CostClaim) (*model.User, error) {
 	var user model.User
@@ -86,7 +109,52 @@ func (r *costPoolResolver) Total(ctx context.Context, obj *model.CostPool) (floa
 	return total, err
 }
 
+func (r *costPoolResolver) CostClaims(ctx context.Context, obj *model.CostPool) ([]*model.CostClaim, error) {
+	var claims []*model.CostClaim
+
+	err := r.DB.SelectContext(ctx, &claims, `
+		SELECT id, running_number, description, author, cost_pool, status, details, created,
+		modified, accepted_by, source_of_money FROM cost_claims WHERE cost_pool = ?
+	`, obj.ID)
+
+	return claims, err
+}
+
+func (r *costPoolResolver) SalesInvoices(ctx context.Context, obj *model.CostPool) ([]*model.SalesInvoice, error) {
+	var invoices []*model.SalesInvoice
+
+	err := r.DB.SelectContext(ctx, &invoices, `
+		SELECT si.id, si.running_number, si.recipient, si.date, si.due_date,
+		si.status, si.details, si.payer_reference, si.contact_person
+		FROM sales_invoice_rows sir
+		JOIN sales_invoices si ON sir.invoice = si.id
+		WHERE sir.cost_pool = ?
+		GROUP BY si.id
+	`, obj.ID)
+
+	return invoices, err
+}
+
+func (r *costPoolResolver) PurchaseInvoices(ctx context.Context, obj *model.CostPool) ([]*model.PurchaseInvoice, error) {
+	var invoices []*model.PurchaseInvoice
+
+	err := r.DB.SelectContext(ctx, &invoices, `
+		SELECT pi.id, pi.sender, pi.description, pi.due_date, pi.status, pi.created,
+		pi.modified, pi.details, pi.note
+		FROM purchase_invoice_rows pir
+		JOIN purchase_invoices pi ON pir.invoice = pi.id
+		WHERE pir.cost_pool = ?
+		GROUP BY pi.id
+	`, obj.ID)
+
+	return invoices, err
+}
+
 func (r *mutationResolver) CreateUser(ctx context.Context, user model.UserInput) (*model.User, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
 	newUser := model.User{
 		ID:    r.ShortID.MustGenerate(),
 		Name:  user.Name,
@@ -94,12 +162,67 @@ func (r *mutationResolver) CreateUser(ctx context.Context, user model.UserInput)
 	}
 
 	_, err := r.DB.ExecContext(ctx, `
-		INSERT INTO users (id, name, email, pw_hash) VALUES (?, ?, ?, 'temp_hash')
+		INSERT INTO users (id, name, email) VALUES (?, ?, ?)
 	`, newUser.ID, newUser.Name, newUser.Email)
+
 	return &newUser, err
 }
 
+func (r *mutationResolver) UpdateUser(ctx context.Context, id string, user model.UserInput) (*model.User, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (string, error) {
+	if session.Get(ctx) == nil {
+		return "", errNotAuthenticated
+	}
+
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (r *mutationResolver) Login(ctx context.Context, email string, password string) (*model.User, error) {
+	var user model.User
+
+	r.DB.GetContext(ctx, &user, `
+		SELECT id, name, email, pw_hash FROM users WHERE email = ?
+	`, email)
+
+	err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
+
+	if err != nil || user.PasswordHash == "" {
+		return nil, errors.New("authentication failed")
+	}
+
+	session.Set(ctx, user.ID)
+
+	return &user, err
+}
+
+func (r *mutationResolver) UpdateSettings(ctx context.Context, settings model.SettingsInput) (*model.User, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (r *mutationResolver) Logout(ctx context.Context) (bool, error) {
+	if session.Get(ctx) == nil {
+		return false, errNotAuthenticated
+	}
+
+	return true, session.Clear(ctx)
+}
+
 func (r *mutationResolver) CreateCostPool(ctx context.Context, costPool model.CostPoolInput) (*model.CostPool, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
 	if costPool.Budget < 0 {
 		return nil, errors.New("cost pool budget must be positive")
 	}
@@ -118,6 +241,10 @@ func (r *mutationResolver) CreateCostPool(ctx context.Context, costPool model.Co
 }
 
 func (r *mutationResolver) UpdateCostPool(ctx context.Context, id string, costPool model.CostPoolInput) (*model.CostPool, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
 	_, err := r.DB.ExecContext(ctx, `
 		UPDATE cost_pools SET name = ?, budget = ? WHERE id = ?
 	`, costPool.Name, costPool.Budget, id)
@@ -130,6 +257,10 @@ func (r *mutationResolver) UpdateCostPool(ctx context.Context, id string, costPo
 }
 
 func (r *mutationResolver) DeleteCostPool(ctx context.Context, id string) (string, error) {
+	if session.Get(ctx) == nil {
+		return "", errNotAuthenticated
+	}
+
 	_, err := r.DB.ExecContext(ctx, `
 		DELETE FROM cost_pools WHERE id = ?
 	`, id)
@@ -138,6 +269,10 @@ func (r *mutationResolver) DeleteCostPool(ctx context.Context, id string) (strin
 }
 
 func (r *mutationResolver) CreateCostClaim(ctx context.Context, costClaim model.CostClaimInput, receipts []*model.ReceiptInput) (*model.CostClaim, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
 	// Begin
 	tx, err := r.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -183,7 +318,7 @@ func (r *mutationResolver) CreateCostClaim(ctx context.Context, costClaim model.
 	}
 
 	for _, receipt := range receipts {
-		err = r.CreateReceipt(ctx, receipt, newCostClaim.ID, tx)
+		err = r.createReceipt(ctx, receipt, newCostClaim.ID, tx)
 		if err != nil {
 			tx.Rollback()
 			return &newCostClaim, err
@@ -203,6 +338,10 @@ func (r *mutationResolver) CreateCostClaim(ctx context.Context, costClaim model.
 }
 
 func (r *mutationResolver) UpdateCostClaim(ctx context.Context, id string, costClaim model.CostClaimInput, receipts []*model.ReceiptInput) (*model.CostClaim, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
 	var oldReceipts, removedReceipts []*model.Receipt
 
 	// Get a list of existing receipts
@@ -229,7 +368,7 @@ func (r *mutationResolver) UpdateCostClaim(ctx context.Context, id string, costC
 		} else {
 			// Upload new receipt files
 			// Insert new receipts into DB
-			err = r.CreateReceipt(ctx, receipt, id, tx)
+			err = r.createReceipt(ctx, receipt, id, tx)
 		}
 
 		if err != nil {
@@ -283,6 +422,10 @@ func (r *mutationResolver) UpdateCostClaim(ctx context.Context, id string, costC
 }
 
 func (r *mutationResolver) DeleteCostClaim(ctx context.Context, id string) (string, error) {
+	if session.Get(ctx) == nil {
+		return "", errNotAuthenticated
+	}
+
 	var receipts []string
 
 	err := r.DB.SelectContext(ctx, &receipts, `
@@ -311,6 +454,10 @@ func (r *mutationResolver) DeleteCostClaim(ctx context.Context, id string) (stri
 }
 
 func (r *mutationResolver) SetCostClaimStatus(ctx context.Context, id string, status model.Status) (*model.CostClaim, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
 	var claim model.CostClaim
 
 	tx, err := r.DB.BeginTxx(ctx, nil)
@@ -331,11 +478,24 @@ func (r *mutationResolver) SetCostClaimStatus(ctx context.Context, id string, st
 		modified, accepted_by, source_of_money FROM cost_claims
 		WHERE id = ?
 	`, id)
+	if err != nil {
+		tx.Rollback()
+		return &claim, err
+	}
 
-	return &claim, err
+	if err = tx.Commit(); err != nil {
+		tx.Rollback()
+		return &claim, err
+	}
+
+	return &claim, nil
 }
 
 func (r *mutationResolver) CreateContact(ctx context.Context, contact model.ContactInput) (*model.Contact, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
 	newContact := model.Contact{
 		ID:   r.ShortID.MustGenerate(),
 		Name: contact.Name,
@@ -352,7 +512,128 @@ func (r *mutationResolver) CreateContact(ctx context.Context, contact model.Cont
 	return &newContact, err
 }
 
+func (r *mutationResolver) UpdateContact(ctx context.Context, id string, contact model.ContactInput) (*model.Contact, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
+	_, err := r.DB.ExecContext(ctx, `
+		UPDATE contacts SET name = ?, address = ? WHERE id = ?
+	`, contact.Name, contact.Address, id)
+
+	return &model.Contact{ID: id, Name: contact.Name, Address: *contact.Address}, err
+}
+
+func (r *mutationResolver) DeleteContact(ctx context.Context, id string) (string, error) {
+	if session.Get(ctx) == nil {
+		return "", errNotAuthenticated
+	}
+
+	_, err := r.DB.ExecContext(ctx, `
+		DELETE FROM contacts WHERE id = ?
+	`, id)
+
+	return id, err
+}
+
+func (r *mutationResolver) CreatePurchaseInvoice(ctx context.Context, invoice model.PurchaseInvoiceInput, rows []*model.InvoiceRowInput) (*model.PurchaseInvoice, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (r *mutationResolver) UpdatePurchaseInvoice(ctx context.Context, id string, invoice model.PurchaseInvoiceInput, rows []*model.InvoiceRowInput) (*model.PurchaseInvoice, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (r *mutationResolver) DeletePurchaseInvoice(ctx context.Context, id string) (string, error) {
+	if session.Get(ctx) == nil {
+		return "", errNotAuthenticated
+	}
+
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (r *mutationResolver) CreateSalesInvoice(ctx context.Context, invoice model.SalesInvoiceInput, rows []*model.InvoiceRowInput) (*model.SalesInvoice, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (r *mutationResolver) UpdateSalesInvoice(ctx context.Context, id string, invoice model.SalesInvoiceInput, rows []*model.InvoiceRowInput) (*model.SalesInvoice, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (r *mutationResolver) DeleteSalesInvoice(ctx context.Context, id string) (string, error) {
+	if session.Get(ctx) == nil {
+		return "", errNotAuthenticated
+	}
+
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (r *purchaseInvoiceResolver) Sender(ctx context.Context, obj *model.PurchaseInvoice) (*model.Contact, error) {
+	var contact model.Contact
+
+	err := r.DB.GetContext(ctx, &contact, `
+		SELECT id, name, address FROM contacts WHERE id = ?
+	`, obj.SenderID)
+
+	return &contact, err
+}
+
+func (r *purchaseInvoiceResolver) Rows(ctx context.Context, obj *model.PurchaseInvoice) ([]*model.PurchaseInvoiceRow, error) {
+	var rows []*model.PurchaseInvoiceRow
+
+	err := r.DB.SelectContext(ctx, &rows, `
+		SELECT id, invoice, cost_pool, description, amount FROM purchase_invoice_rows WHERE invoice = ?
+	`, obj.ID)
+
+	return rows, err
+}
+
+func (r *purchaseInvoiceResolver) Total(ctx context.Context, obj *model.PurchaseInvoice) (float64, error) {
+	var total float64
+
+	err := r.DB.GetContext(ctx, &total, `
+		SELECT ROUND(COALESCE(SUM(amount), 0), 2) FROM purchase_invoice_rows WHERE invoice = ?
+	`, obj.ID)
+
+	return total, err
+}
+
+func (r *purchaseInvoiceRowResolver) Invoice(ctx context.Context, obj *model.PurchaseInvoiceRow) (*model.PurchaseInvoice, error) {
+	var invoice model.PurchaseInvoice
+
+	err := r.DB.GetContext(ctx, &invoice, `
+		SELECT id, sender, description, due_date, status, created, modified, details, note
+		FROM purchase_invoices WHERE id = ?
+	`, obj.InvoiceID)
+
+	return &invoice, err
+}
+
+func (r *purchaseInvoiceRowResolver) CostPool(ctx context.Context, obj *model.PurchaseInvoiceRow) (*model.CostPool, error) {
+	return r.Resolver.Query().CostPool(ctx, obj.CostPoolID)
+}
+
 func (r *queryResolver) CostClaims(ctx context.Context, limit *int, offset int) ([]*model.CostClaim, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
 	var costClaims []*model.CostClaim
 
 	limitClause := ""
@@ -367,7 +648,25 @@ func (r *queryResolver) CostClaims(ctx context.Context, limit *int, offset int) 
 	return costClaims, err
 }
 
+func (r *queryResolver) CostClaimCount(ctx context.Context) (int, error) {
+	if session.Get(ctx) == nil {
+		return 0, errNotAuthenticated
+	}
+
+	var count int
+
+	err := r.DB.GetContext(ctx, &count, `
+		SELECT COUNT(*) FROM cost_claims
+	`)
+
+	return count, err
+}
+
 func (r *queryResolver) CostClaim(ctx context.Context, id string) (*model.CostClaim, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
 	var costClaim model.CostClaim
 
 	err := r.DB.GetContext(ctx, &costClaim, `
@@ -379,17 +678,32 @@ func (r *queryResolver) CostClaim(ctx context.Context, id string) (*model.CostCl
 	return &costClaim, err
 }
 
-func (r *queryResolver) User(ctx context.Context, id string) (*model.User, error) {
+func (r *queryResolver) User(ctx context.Context, id *string) (*model.User, error) {
+	var userID string
+	if sessionID := session.Get(ctx); sessionID != nil {
+		if id != nil {
+			userID = *id
+		} else {
+			userID = *sessionID
+		}
+	} else {
+		return nil, errNotAuthenticated
+	}
+
 	var user model.User
 
 	err := r.DB.GetContext(ctx, &user, `
 		SELECT id, name, email, signature, role, pw_hash FROM users WHERE id = ?
-	`, id)
+	`, userID)
 
 	return &user, err
 }
 
 func (r *queryResolver) Users(ctx context.Context, limit *int, offset int) ([]*model.User, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
 	var users []*model.User
 
 	limitClause := ""
@@ -404,6 +718,10 @@ func (r *queryResolver) Users(ctx context.Context, limit *int, offset int) ([]*m
 }
 
 func (r *queryResolver) CostPools(ctx context.Context, limit *int, offset int) ([]*model.CostPool, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
 	var costPools []*model.CostPool
 
 	limitClause := ""
@@ -417,47 +735,172 @@ func (r *queryResolver) CostPools(ctx context.Context, limit *int, offset int) (
 	return costPools, err
 }
 
-func (r *queryResolver) Contacts(ctx context.Context, limit *int, offset int) ([]*model.Contact, error) {
-	var contacts []*model.Contact
+func (r *queryResolver) CostPoolCount(ctx context.Context) (int, error) {
+	if session.Get(ctx) == nil {
+		return 0, errNotAuthenticated
+	}
+
+	var count int
+
+	err := r.DB.GetContext(ctx, &count, `
+		SELECT COUNT(*) FROM cost_pools
+	`)
+
+	return count, err
+}
+
+func (r *queryResolver) CostPool(ctx context.Context, id string) (*model.CostPool, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
+	var costPool model.CostPool
+
+	err := r.DB.GetContext(ctx, &costPool, `
+		SELECT id, name, budget FROM cost_pools WHERE id = ?
+	`, id)
+
+	return &costPool, err
+}
+
+func (r *queryResolver) Contacts(ctx context.Context, limit *int, offset int, searchTerm *string) (*model.ContactsConnection, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
+	args := make([]interface{}, 0)
+
+	searchClause := ""
+	if searchTerm != nil && *searchTerm != "" {
+		searchClause = fmt.Sprintf("WHERE MATCH (name, address) AGAINST (?)")
+		args = append(args, *searchTerm)
+	}
 
 	limitClause := ""
 	if limit != nil {
 		limitClause = fmt.Sprintf("LIMIT %d OFFSET %d", *limit, offset)
 	}
+
+	var contacts []*model.Contact
 	err := r.DB.SelectContext(ctx, &contacts, fmt.Sprintf(`
-		SELECT id, name, address FROM contacts ORDER BY name %s
-	`, limitClause))
-
-	return contacts, err
-}
-
-func (r *queryResolver) AccessToken(ctx context.Context, email string, password string) (string, error) {
-	var user model.User
-
-	r.DB.GetContext(ctx, &user, `
-		SELECT id, name, email, pw_hash FROM users WHERE email = ?
-	`, email)
-
-	err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
-
-	if err != nil || user.PasswordHash == "" {
-		return "", errors.New("authentication failed")
+		SELECT id, name, address FROM contacts %s ORDER BY name %s
+	`, searchClause, limitClause), args...)
+	if err != nil {
+		return nil, err
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":   user.ID,
-		"name":  user.Name,
-		"email": user.Email,
-	})
+	var totalCount int
+	err = r.DB.GetContext(ctx, &totalCount, fmt.Sprintf(`
+		SELECT COUNT(*) FROM contacts %s
+	`, searchClause), args...)
 
-	tokenString, err := token.SignedString(r.JWTKey)
+	return &model.ContactsConnection{
+		Nodes:      contacts,
+		TotalCount: totalCount,
+	}, err
+}
 
-	return tokenString, err
+func (r *queryResolver) Contact(ctx context.Context, id string) (*model.Contact, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
+	var contact model.Contact
+
+	err := r.DB.GetContext(ctx, &contact, `
+		SELECT id, name, address FROM contacts WHERE id = ?
+	`, id)
+
+	return &contact, err
+}
+
+func (r *queryResolver) PurchaseInvoices(ctx context.Context, limit *int, offset int) (*model.PurchaseInvoicesConnection, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (r *queryResolver) PurchaseInvoice(ctx context.Context, id string) (*model.PurchaseInvoice, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (r *queryResolver) SalesInvoices(ctx context.Context, limit *int, offset int) (*model.SalesInvoicesConnection, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (r *queryResolver) SalesInvoice(ctx context.Context, id string) (*model.SalesInvoice, error) {
+	if session.Get(ctx) == nil {
+		return nil, errNotAuthenticated
+	}
+
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (r *salesInvoiceResolver) Recipient(ctx context.Context, obj *model.SalesInvoice) (*model.Contact, error) {
+	var contact model.Contact
+
+	err := r.DB.GetContext(ctx, &contact, `
+		SELECT id, name, address FROM contacts WHERE id = ?
+	`, obj.RecipientID)
+
+	return &contact, err
+}
+
+func (r *salesInvoiceResolver) Rows(ctx context.Context, obj *model.SalesInvoice) ([]*model.SalesInvoiceRow, error) {
+	var rows []*model.SalesInvoiceRow
+
+	err := r.DB.SelectContext(ctx, &rows, `
+		SELECT id, invoice, cost_pool, description, amount FROM sales_invoice_rows WHERE invoice = ?
+	`, obj.ID)
+
+	return rows, err
+}
+
+func (r *salesInvoiceResolver) Total(ctx context.Context, obj *model.SalesInvoice) (float64, error) {
+	var total float64
+
+	err := r.DB.GetContext(ctx, &total, `
+		SELECT ROUND(COALESCE(SUM(amount), 0), 2) FROM sales_invoice_rows WHERE invoice = ?
+	`, obj.ID)
+
+	return total, err
+}
+
+func (r *salesInvoiceRowResolver) Invoice(ctx context.Context, obj *model.SalesInvoiceRow) (*model.SalesInvoice, error) {
+	var invoice model.SalesInvoice
+
+	err := r.DB.GetContext(ctx, &invoice, `
+		SELECT id, running_number, recipient, date, due_date, status, details, payer_reference, contact_person
+		FROM purchase_invoices WHERE id = ?
+	`, obj.InvoiceID)
+
+	return &invoice, err
+}
+
+func (r *salesInvoiceRowResolver) CostPool(ctx context.Context, obj *model.SalesInvoiceRow) (*model.CostPool, error) {
+	return r.Resolver.Query().CostPool(ctx, obj.CostPoolID)
+}
+
+func (r *userResolver) Position(ctx context.Context, obj *model.User) (string, error) {
+	panic(fmt.Errorf("not implemented"))
 }
 
 func (r *userResolver) HasPassword(ctx context.Context, obj *model.User) (bool, error) {
 	return obj.PasswordHash != "", nil
 }
+
+// Contact returns generated.ContactResolver implementation.
+func (r *Resolver) Contact() generated.ContactResolver { return &contactResolver{r} }
 
 // CostClaim returns generated.CostClaimResolver implementation.
 func (r *Resolver) CostClaim() generated.CostClaimResolver { return &costClaimResolver{r} }
@@ -468,47 +911,37 @@ func (r *Resolver) CostPool() generated.CostPoolResolver { return &costPoolResol
 // Mutation returns generated.MutationResolver implementation.
 func (r *Resolver) Mutation() generated.MutationResolver { return &mutationResolver{r} }
 
+// PurchaseInvoice returns generated.PurchaseInvoiceResolver implementation.
+func (r *Resolver) PurchaseInvoice() generated.PurchaseInvoiceResolver {
+	return &purchaseInvoiceResolver{r}
+}
+
+// PurchaseInvoiceRow returns generated.PurchaseInvoiceRowResolver implementation.
+func (r *Resolver) PurchaseInvoiceRow() generated.PurchaseInvoiceRowResolver {
+	return &purchaseInvoiceRowResolver{r}
+}
+
 // Query returns generated.QueryResolver implementation.
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
+
+// SalesInvoice returns generated.SalesInvoiceResolver implementation.
+func (r *Resolver) SalesInvoice() generated.SalesInvoiceResolver { return &salesInvoiceResolver{r} }
+
+// SalesInvoiceRow returns generated.SalesInvoiceRowResolver implementation.
+func (r *Resolver) SalesInvoiceRow() generated.SalesInvoiceRowResolver {
+	return &salesInvoiceRowResolver{r}
+}
 
 // User returns generated.UserResolver implementation.
 func (r *Resolver) User() generated.UserResolver { return &userResolver{r} }
 
+type contactResolver struct{ *Resolver }
 type costClaimResolver struct{ *Resolver }
 type costPoolResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
+type purchaseInvoiceResolver struct{ *Resolver }
+type purchaseInvoiceRowResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
+type salesInvoiceResolver struct{ *Resolver }
+type salesInvoiceRowResolver struct{ *Resolver }
 type userResolver struct{ *Resolver }
-
-// !!! WARNING !!!
-// The code below was going to be deleted when updating resolvers. It has been copied here so you have
-// one last chance to move it out of harms way if you want. There are two reasons this happens:
-//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
-//    it when you're done.
-//  - You have helper methods in this file. Move them out to keep these resolver files clean.
-func (r *mutationResolver) CreateReceipt(ctx context.Context, receipt *model.ReceiptInput, costClaimID string, tx *sqlx.Tx) error {
-	// Form a file name for the attachment
-	newReceipt := model.Receipt{
-		ID:     r.ShortID.MustGenerate(),
-		Amount: receipt.Amount,
-		Date:   receipt.Date,
-	}
-
-	log.Infof("File upload for receipt (%s): %s (%s %d bytes)", newReceipt.ID, receipt.File.Filename, receipt.File.ContentType, receipt.File.Size)
-
-	parts := strings.Split(receipt.File.Filename, ".")
-	extension := "." + parts[len(parts)-1]
-	receiptFileName := newReceipt.ID + extension
-
-	err := storage.SaveReceipt(receipt.File.File, receiptFileName)
-	if err != nil {
-		return err
-	}
-
-	newReceipt.Attachment = receiptFileName
-
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO receipts (id, date, amount, attachment, cost_claim) VALUES (?, ?, ?, ?, ?)
-	`, newReceipt.ID, newReceipt.Date, newReceipt.Amount, newReceipt.Attachment, costClaimID)
-	return err
-}

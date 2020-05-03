@@ -26,6 +26,7 @@ type User {
     name: String!
     email: String!
     signature: String
+    position: String!
     role: UserRole!
     hasPassword: Boolean!
 }
@@ -33,6 +34,16 @@ type User {
 input UserInput {
     name: String!
     email: String!
+    role: UserRole!
+    password: String
+}
+
+input SettingsInput {
+    name: String!
+    email: String!
+    position: String!
+    signature: Upload
+    newPassword: String
 }
 
 type Receipt {
@@ -54,6 +65,9 @@ type CostPool {
     name: String!
     budget: Float!
     total: Float!
+    costClaims: [CostClaim!]!
+    salesInvoices: [SalesInvoice!]!
+    purchaseInvoices: [PurchaseInvoice!]!
 }
 
 input CostPoolInput {
@@ -73,7 +87,7 @@ type CostClaim {
     modified: DateTime
     acceptedBy: User
     sourceOfMoney: SourceOfMoney!
-    receipts: [Receipt]!
+    receipts: [Receipt!]!
     total: Float!
 }
 
@@ -89,6 +103,8 @@ type Contact {
     id: ID!
     name: String!
     address: String!
+    salesInvoices: [SalesInvoice!]!
+    purchaseInvoices: [PurchaseInvoice!]!
 }
 
 input ContactInput {
@@ -96,18 +112,124 @@ input ContactInput {
     address: String
 }
 
+type ContactsConnection {
+    nodes: [Contact!]!
+    totalCount: Int!
+}
+
+input InvoiceRowInput {
+    costPool: ID!
+    description: String!
+    amount: Float!
+}
+
+type SalesInvoiceRow {
+    id: ID!
+    invoice: SalesInvoice!
+    costPool: CostPool!
+    description: String!
+    amount: Float!
+}
+
+type SalesInvoice {
+    id: ID!
+    runningNumber: Int!
+    recipient: Contact!
+    date: Date!
+    dueDate: Date!
+    status: Status!
+    details: String
+    payerReference: String
+    contactPerson: String
+    rows: [SalesInvoiceRow!]!
+    total: Float!
+}
+
+input SalesInvoiceInput {
+    recipient: ID!
+    date: Date!
+    dueDate: Date!
+    details: String
+    payerReference: String
+    contactPerson: String
+}
+
+type SalesInvoicesConnection {
+    nodes: [SalesInvoice!]!
+    totalCount: Int!
+}
+
+type PurchaseInvoiceRow {
+    id: ID!
+    invoice: PurchaseInvoice!
+    costPool: CostPool!
+    description: String!
+    amount: Float!
+}
+
+type PurchaseInvoice {
+    id: ID!
+    sender: Contact!
+    description: String!
+    dueDate: Date!
+    status: Status!
+    created: DateTime!
+    modified: DateTime
+    details: String
+    note: String
+    rows: [PurchaseInvoiceRow!]!
+    total: Float!
+}
+
+input PurchaseInvoiceInput {
+    sender: ID!
+    description: String!
+    dueDate: Date!
+    details: String
+}
+
+type PurchaseInvoicesConnection {
+    nodes: [PurchaseInvoice!]!
+    totalCount: Int!
+}
+
 type Query {
     costClaims(limit: Int = 20, offset: Int! = 0): [CostClaim!]!
+    costClaimCount: Int!
     costClaim(id: ID!): CostClaim
-    user(id: ID!): User
+
+    user(id: ID): User!
     users(limit: Int = 20, offset: Int! = 0): [User!]!
+
     costPools(limit: Int = 20, offset: Int! = 0): [CostPool!]!
-    contacts(limit: Int = 20, offset: Int! = 0): [Contact!]!
-    accessToken(email: String!, password: String!): String!
+    costPoolCount: Int!
+    costPool(id: ID!): CostPool!
+
+    contacts(
+        limit: Int = 20
+        offset: Int! = 0
+        searchTerm: String
+    ): ContactsConnection!
+    contact(id: ID!): Contact!
+
+    purchaseInvoices(
+        limit: Int = 20
+        offset: Int! = 0
+    ): PurchaseInvoicesConnection!
+    purchaseInvoice(id: ID!): PurchaseInvoice!
+
+    salesInvoices(limit: Int = 20, offset: Int! = 0): SalesInvoicesConnection!
+    salesInvoice(id: ID!): SalesInvoice!
 }
 
 type Mutation {
     createUser(user: UserInput!): User!
+    updateUser(id: ID!, user: UserInput!): User!
+    deleteUser(id: ID!): ID!
+
+    login(email: String!, password: String!): User!
+    updateSettings(settings: SettingsInput!): User!
+    logout: Boolean!
 
     createCostPool(costPool: CostPoolInput!): CostPool!
     updateCostPool(id: ID!, costPool: CostPoolInput!): CostPool!
@@ -126,4 +248,28 @@ type Mutation {
     setCostClaimStatus(id: ID!, status: Status!): CostClaim!
 
     createContact(contact: ContactInput!): Contact!
+    updateContact(id: ID!, contact: ContactInput!): Contact!
+    deleteContact(id: ID!): ID!
+
+    createPurchaseInvoice(
+        invoice: PurchaseInvoiceInput!
+        rows: [InvoiceRowInput!]!
+    ): PurchaseInvoice!
+    updatePurchaseInvoice(
+        id: ID!
+        invoice: PurchaseInvoiceInput!
+        rows: [InvoiceRowInput!]!
+    ): PurchaseInvoice!
+    deletePurchaseInvoice(id: ID!): ID!
+
+    createSalesInvoice(
+        invoice: SalesInvoiceInput!
+        rows: [InvoiceRowInput!]!
+    ): SalesInvoice!
+    updateSalesInvoice(
+        id: ID!
+        invoice: SalesInvoiceInput!
+        rows: [InvoiceRowInput!]!
+    ): SalesInvoice!
+    deleteSalesInvoice(id: ID!): ID!
 }

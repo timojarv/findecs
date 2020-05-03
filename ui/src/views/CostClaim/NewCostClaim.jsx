@@ -1,9 +1,8 @@
 import React, { useContext } from "react";
 import { Box, Heading, Button, useToast } from "@chakra-ui/core";
-import CostClaimForm from "../forms/CostClaimForm";
+import CostClaimForm from "../../forms/CostClaimForm";
 import { Link } from "react-router-dom";
 import { useMutation } from "urql";
-import { AuthContext } from "../util/auth";
 
 const mutation = `
     mutation CreateCostClaim($costClaim: CostClaimInput!, $receipts: [ReceiptInput!]!) {
@@ -43,7 +42,6 @@ const mutation = `
 const NewCostClaim = (props) => {
     const [creation, createCostClaim] = useMutation(mutation);
     const toast = useToast();
-    const user = useContext(AuthContext);
 
     const handleSubmit = (data) => {
         createCostClaim({
@@ -52,7 +50,6 @@ const NewCostClaim = (props) => {
                 costPool: data.costPool,
                 sourceOfMoney: data.sourceOfMoney,
                 details: data.details,
-                author: user.id,
             },
             receipts: data.receipts,
         }).then(({ error, data }) => {
@@ -86,8 +83,8 @@ const NewCostClaim = (props) => {
             >
                 Takaisin
             </Button>
-            <Heading mb={8} as="h2" size="lg">
-                Luo kulukorvaus
+            <Heading mb={8} as="h2">
+                Uusi kulukorvaus
             </Heading>
             <CostClaimForm
                 isLoading={creation.fetching}

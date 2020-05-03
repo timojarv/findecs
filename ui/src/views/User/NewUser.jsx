@@ -16,7 +16,7 @@ import {
     Flex,
     FormErrorMessage,
 } from "@chakra-ui/core";
-import { roles } from "../util/metadata";
+import { roles } from "../../util/metadata";
 
 const NewUser = (props) => {
     const { isOpen, onToggle } = useDisclosure();
@@ -38,7 +38,9 @@ const NewUser = (props) => {
                 <FormLabel htmlFor="role">Rooli</FormLabel>
                 <Select name="role">
                     {Object.keys(roles).map((role, i) => (
-                        <option value={role}>{roles[role].label}</option>
+                        <option key={role} value={role}>
+                            {roles[role].label}
+                        </option>
                     ))}
                 </Select>
             </FormControl>

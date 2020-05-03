@@ -1,10 +1,9 @@
 import React, { useContext } from "react";
 import { Box, Heading, Button, useToast } from "@chakra-ui/core";
-import CostClaimForm from "../forms/CostClaimForm";
+import CostClaimForm from "../../forms/CostClaimForm";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "urql";
-import ErrorDisplay from "../components/ErrorDisplay";
-import { AuthContext } from "../util/auth";
+import ErrorDisplay from "../../components/ErrorDisplay";
 
 const query = `
     query FetchCostClaim ($id: ID!) {
@@ -84,7 +83,6 @@ const EditCostClaim = (props) => {
     const [result] = useQuery({ query, variables: { id } });
     const [update, updateCostClaim] = useMutation(mutation);
     const toast = useToast();
-    const user = useContext(AuthContext);
 
     const data = (result.data || {}).costClaim;
 
@@ -96,7 +94,6 @@ const EditCostClaim = (props) => {
                 costPool: data.costPool,
                 sourceOfMoney: data.sourceOfMoney,
                 details: data.details,
-                author: user.id,
             },
             receipts: data.receipts,
         }).then(({ error }) => {
@@ -130,7 +127,7 @@ const EditCostClaim = (props) => {
             >
                 Takaisin
             </Button>
-            <Heading mb={8} as="h2" size="lg">
+            <Heading mb={8} as="h2">
                 Muokkaa kulukorvausta
             </Heading>
             <ErrorDisplay error={result.error} />

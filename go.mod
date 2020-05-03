@@ -1,9 +1,11 @@
-module github.com/indecstty/findecs
+module github.com/timojarv/findecs
 
 go 1.12
 
 require (
 	github.com/99designs/gqlgen v0.11.3
+	github.com/alexedwards/scs/mysqlstore v0.0.0-20200225172727-3308e1066830
+	github.com/alexedwards/scs/v2 v2.3.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/go-chi/chi v4.1.1+incompatible
 	github.com/go-chi/cors v1.1.1

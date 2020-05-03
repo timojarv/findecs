@@ -10,15 +10,14 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 )
 
-type Contact struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Address string `json:"address"`
-}
-
 type ContactInput struct {
 	Name    string  `json:"name"`
 	Address *string `json:"address"`
+}
+
+type ContactsConnection struct {
+	Nodes      []*Contact `json:"nodes"`
+	TotalCount int        `json:"totalCount"`
 }
 
 type CostClaimInput struct {
@@ -32,6 +31,24 @@ type CostClaimInput struct {
 type CostPoolInput struct {
 	Name   string  `json:"name"`
 	Budget float64 `json:"budget"`
+}
+
+type InvoiceRowInput struct {
+	CostPool    string  `json:"costPool"`
+	Description string  `json:"description"`
+	Amount      float64 `json:"amount"`
+}
+
+type PurchaseInvoiceInput struct {
+	Sender      string  `json:"sender"`
+	Description string  `json:"description"`
+	DueDate     string  `json:"dueDate"`
+	Details     *string `json:"details"`
+}
+
+type PurchaseInvoicesConnection struct {
+	Nodes      []*PurchaseInvoice `json:"nodes"`
+	TotalCount int                `json:"totalCount"`
 }
 
 type Receipt struct {
@@ -48,9 +65,33 @@ type ReceiptInput struct {
 	File   *graphql.Upload `json:"file"`
 }
 
+type SalesInvoiceInput struct {
+	Recipient      string  `json:"recipient"`
+	Date           string  `json:"date"`
+	DueDate        string  `json:"dueDate"`
+	Details        *string `json:"details"`
+	PayerReference *string `json:"payerReference"`
+	ContactPerson  *string `json:"contactPerson"`
+}
+
+type SalesInvoicesConnection struct {
+	Nodes      []*SalesInvoice `json:"nodes"`
+	TotalCount int             `json:"totalCount"`
+}
+
+type SettingsInput struct {
+	Name        string          `json:"name"`
+	Email       string          `json:"email"`
+	Position    string          `json:"position"`
+	Signature   *graphql.Upload `json:"signature"`
+	NewPassword *string         `json:"newPassword"`
+}
+
 type UserInput struct {
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	Name     string   `json:"name"`
+	Email    string   `json:"email"`
+	Role     UserRole `json:"role"`
+	Password *string  `json:"password"`
 }
 
 type SourceOfMoney string

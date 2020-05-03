@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState } from "react";
 import {
     Flex,
     Heading,
@@ -6,54 +6,49 @@ import {
     FormControl,
     FormLabel,
     Input,
-    Checkbox,
     FormHelperText,
     Button,
     Link,
     Image,
     useToast,
 } from "@chakra-ui/core";
-import { useClient } from "urql";
+import { useMutation } from "urql";
 import { useForm } from "react-hook-form";
 import FindecsLogo from "../resources/logo.svg";
-import { AuthContext } from "../util/auth";
+import { Redirect } from "react-router-dom";
 
-const query = `
-    query Login($email: String!, $password: String!) {
-        accessToken(email: $email, password: $password)
+const mutation = `
+    mutation Login($email: String!, $password: String!) {
+        login(email: $email, password: $password) {
+            id
+            name
+        }
     }
 `;
 
 const Login = (props) => {
-    const client = useClient();
-    const [loading, setLoading] = useState(false);
+    const { setUser } = props;
+    const [login, doLogin] = useMutation(mutation);
     const { register, handleSubmit } = useForm();
     const toast = useToast();
-    const { setToken } = useContext(AuthContext);
 
     const onSubmit = (form) => {
-        setLoading(true);
-        client
-            .query(query, form, { requestPolicy: "network-only" })
-            .toPromise()
-            .then((res) => {
-                if (res.error) {
-                    toast({
-                        title: "Kirjautuminen epäonnistui",
-                        status: "error",
-                        position: "top",
-                    });
-                    setLoading(false);
-                } else {
-                    toast({
-                        title: "Kirjautuminen onnistui",
-                        status: "success",
-                        position: "top",
-                    });
-                    setToken(res.data.accessToken);
-                    props.history.push("/");
-                }
-            });
+        doLogin(form).then((res) => {
+            if (res.error) {
+                toast({
+                    title: "Kirjautuminen epäonnistui",
+                    status: "error",
+                    position: "top",
+                });
+            } else {
+                toast({
+                    title: "Kirjautuminen onnistui",
+                    status: "success",
+                    position: "top",
+                });
+                setUser(res.data.login);
+            }
+        });
     };
 
     return (
@@ -92,19 +87,14 @@ const Login = (props) => {
                         <Link>Salasana unohtunut?</Link>
                     </FormHelperText>
                 </FormControl>
-                <Flex align="center">
-                    <Checkbox flexGrow={1} name="remember" ref={register}>
-                        Muista salasana
-                    </Checkbox>
-                    <Button
-                        isLoading={loading}
-                        type="submit"
-                        float="right"
-                        variantColor="indigo"
-                    >
-                        Kirjaudu
-                    </Button>
-                </Flex>
+                <Button
+                    isLoading={login.fetching}
+                    type="submit"
+                    float="right"
+                    variantColor="indigo"
+                >
+                    Kirjaudu
+                </Button>
             </Box>
             <Box my={10} height={20}></Box>
         </Flex>

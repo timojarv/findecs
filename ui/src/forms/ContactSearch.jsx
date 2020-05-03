@@ -1,24 +1,28 @@
 import React from "react";
 import { Box, useTheme } from "@chakra-ui/core";
 import { useQuery } from "urql";
-import Select from "react-select";
+import ReactSelect from "react-select";
+import { Controller } from "react-hook-form";
 
 const query = `
     query FetchContacts {
-        contacts(limit: 500) {
-            id
-            name
-            address
+        contacts(limit: null) {
+            nodes {
+                id
+                name
+            }
         }
     }
 `;
 
-const ContactSearch = (props) => {
+const ContactSearch = React.forwardRef((props, ref) => {
     const [result] = useQuery({ query });
     const theme = useTheme();
 
-    const options = result.data
-        ? result.data.contacts.map((contact) => ({
+    const { fetching, error, data } = result;
+
+    const options = data
+        ? data.contacts.nodes.map((contact) => ({
               value: contact.id,
               label: contact.name,
           }))
@@ -26,11 +30,13 @@ const ContactSearch = (props) => {
 
     return (
         <Box>
-            <Select
+            <Controller
+                as={ReactSelect}
+                {...props}
                 options={options}
                 placeholder="Valitse yhteystieto"
                 loadingMessage={() => "Ladataan vaihtoehtoja..."}
-                isLoading={result.fetching}
+                isLoading={fetching}
                 noOptionsMessage={() => "Ei tuloksia"}
                 theme={(defaultTheme) => ({
                     ...defaultTheme,
@@ -68,6 +74,6 @@ const ContactSearch = (props) => {
             />
         </Box>
     );
-};
+});
 
 export default ContactSearch;

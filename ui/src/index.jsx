@@ -26,6 +26,9 @@ const client = createClient({
         multipartFetchExchange,
     ],
     requestPolicy: "cache-and-network",
+    fetchOptions: {
+        credentials: "include",
+    },
 });
 
 ReactDOM.render(

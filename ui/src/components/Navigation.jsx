@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState } from "react";
 import { Link, Redirect } from "react-router-dom";
 
 import {
@@ -10,10 +10,17 @@ import {
     MenuItem,
     Button,
     Image,
+    useToast,
 } from "@chakra-ui/core";
 import { Menu as Hamburger, X } from "react-feather";
 import FindecsLogo from "../resources/logo.svg";
-import { AuthContext } from "../util/auth";
+import { useMutation } from "urql";
+
+const mutation = `
+    mutation Logout {
+        logout
+    }
+`;
 
 const NavItem = (props) => (
     <Button variant="ghost" to={props.to} as={Link} mt={[1, 0]}>
@@ -22,19 +29,27 @@ const NavItem = (props) => (
 );
 
 const Navigation = (props) => {
+    const { user, setUser } = props;
     const path = props.location.pathname;
 
     const [open, setOpen] = useState(false);
+    const [_, logout] = useMutation(mutation);
+    const toast = useToast();
+
     const handleToggle = () => setOpen(!open);
 
-    const user = useContext(AuthContext);
+    const handleLogout = () => {
+        logout().then(() => {
+            setUser(null);
+            toast({
+                position: "top",
+                title: "Kirjauduttu ulos",
+            });
+        });
+    };
 
-    if (path.endsWith("print") || path.endsWith("login")) {
+    if (path.endsWith("print")) {
         return null;
-    }
-
-    if (!user.name && !props.isAuthenticating) {
-        return <Redirect to="/login" />;
     }
 
     return (
@@ -104,13 +119,13 @@ const Navigation = (props) => {
                         variant="ghost"
                         rightIcon="chevron-down"
                     >
-                        {user.name || "Tuntematon"}
+                        {user.name}
                     </MenuButton>
                     <MenuList>
                         <MenuItem as={Link} to="/settings">
                             Asetukset
                         </MenuItem>
-                        <MenuItem onClick={() => user.setToken(null)}>
+                        <MenuItem onClick={handleLogout}>
                             Kirjaudu ulos
                         </MenuItem>
                     </MenuList>

@@ -21,7 +21,7 @@ var DB *sqlx.DB
 
 func init() {
 	var err error
-	dsn := fmt.Sprintf("findecs:%s@/findecs?multiStatements=true", os.Getenv("MYSQL_PASSWORD"))
+	dsn := fmt.Sprintf("findecs:%s@/findecs?multiStatements=true&interpolateParams=true", os.Getenv("MYSQL_PASSWORD"))
 	DB, err = sqlx.Connect("mysql", dsn)
 	if err != nil {
 		logrus.Fatal(err)

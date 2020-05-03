@@ -12,8 +12,8 @@ import {
     IconButton,
 } from "@chakra-ui/core";
 import { useQuery } from "urql";
-import ErrorDisplay from "../components/ErrorDisplay";
-import { roles } from "../util/metadata";
+import ErrorDisplay from "../../components/ErrorDisplay";
+import { roles } from "../../util/metadata";
 
 const query = `
     query {
@@ -92,7 +92,7 @@ const Users = (props) => {
             >
                 Luo uusi
             </Button>
-            {result.fetching ? <Spinner color="indigo.500" size="xl" /> : null}
+            {result.fetching ? <Spinner color="indigo.500" /> : null}
             <ErrorDisplay error={result.error} />
             <Stack spacing={3}>
                 {users.map((user) => (

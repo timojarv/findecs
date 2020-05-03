@@ -1,0 +1,1 @@
+CREATE FULLTEXT INDEX contact_fulltext ON contacts(name, address);
