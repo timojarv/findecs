@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
     Flex,
     Heading,
@@ -10,11 +10,12 @@ import {
     Button,
     Link,
     Image,
-    useToast,
 } from "@chakra-ui/core";
 import { useMutation } from "urql";
 import { useForm } from "react-hook-form";
 import FindecsLogo from "../resources/logo.svg";
+import { useMessage } from "../util/message";
+import { Link as RouterLink } from "react-router-dom";
 
 const mutation = `
     mutation Login($email: String!, $password: String!) {
@@ -29,22 +30,14 @@ const Login = (props) => {
     const { setUser } = props;
     const [login, doLogin] = useMutation(mutation);
     const { register, handleSubmit } = useForm();
-    const toast = useToast();
+    const { successMessage, errorMessage } = useMessage();
 
     const onSubmit = (form) => {
         doLogin(form).then((res) => {
             if (res.error) {
-                toast({
-                    title: "Kirjautuminen epäonnistui",
-                    status: "error",
-                    position: "top",
-                });
+                errorMessage("Kirjautuminen epäonnistui", true);
             } else {
-                toast({
-                    title: "Kirjautuminen onnistui",
-                    status: "success",
-                    position: "top",
-                });
+                successMessage("Kirjautuminen onnistui");
                 setUser(res.data.login);
             }
         });
@@ -83,7 +76,9 @@ const Login = (props) => {
                         ref={register({ required: true })}
                     />
                     <FormHelperText>
-                        <Link>Salasana unohtunut?</Link>
+                        <Link as={RouterLink} to="/resetPassword">
+                            Salasana unohtunut?
+                        </Link>
                     </FormHelperText>
                 </FormControl>
                 <Button

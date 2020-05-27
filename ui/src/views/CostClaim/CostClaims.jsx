@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import {
     Box,
@@ -9,6 +9,7 @@ import {
     Spinner,
     IconButton,
     Tooltip,
+    Flex,
 } from "@chakra-ui/core";
 import {
     TableContainer,
@@ -23,19 +24,27 @@ import { statuses, statusColors } from "../../util/metadata";
 import { formatCurrency, formatDate } from "../../util/format";
 import { useQuery, useMutation } from "urql";
 import ErrorDisplay from "../../components/ErrorDisplay";
+import Empty from "../../components/Empty";
+import Pagination from "../../components/Pagination";
+import ViewOptions from "../../components/ViewOptions";
+
+const limit = 15;
 
 const query = `
-    query FetchCostClaims {
-        costClaims {
-            id
-            description
-            created
-            total
-            status
-            author {
+    query FetchCostClaims($offset: Int! = 0, $viewOptions: ViewOptions) {
+        costClaims(offset: $offset, limit: ${limit}, viewOptions: $viewOptions) {
+            nodes {
                 id
-                name
+                description
+                created
+                total
+                status
+                author {
+                    id
+                    name
+                }
             }
+            totalCount
         }
     }
 `;
@@ -58,13 +67,12 @@ const ClaimRow = ({ claim }) => {
                     as={RouterLink}
                     to={`/costClaims/${claim.id}`}
                     color="indigo.700"
-                    py={2}
                     display="block"
                 >
                     {claim.description}
                 </Link>
             </TD>
-            <TD py={6} display={["none", "table-cell"]}>
+            <TD display={["none", "table-cell"]}>
                 <Link
                     whiteSpace="nowrap"
                     as={RouterLink}
@@ -149,50 +157,60 @@ const ClaimRow = ({ claim }) => {
 };
 
 const CostClaims = (props) => {
-    const [result] = useQuery({ query });
+    const [offset, setOffset] = useState(0);
+    const [viewOptions, setViewOptions] = useState(null);
+    const [result] = useQuery({ query, variables: { offset, viewOptions } });
 
-    const claims = result.data ? result.data.costClaims : [];
+    const { fetching, error, data } = result;
+    const claims = data ? data.costClaims.nodes : [];
 
     return (
         <Box pt={8}>
             <Heading as="h2">Kulukorvaukset</Heading>
-            <Button
-                as={RouterLink}
-                leftIcon="add"
-                variantColor="indigo"
-                to="/costClaims/new"
-                my={6}
-            >
-                Luo uusi
-            </Button>
-            {result.fetching ? <Spinner color="indigo.500" /> : null}
-            <ErrorDisplay error={result.error} />
-            {result.data ? (
-                <TableContainer>
-                    <Table>
-                        <THead>
-                            <TR>
-                                <TH textAlign="left">Kuvaus</TH>
-                                <TH
-                                    display={["none", "table-cell"]}
-                                    textAlign="left"
-                                >
-                                    Tekijä
-                                </TH>
-                                <TH textAlign="center">Luotu</TH>
-                                <TH textAlign="right">Summa</TH>
-                                <TH textAlign="right">Tila</TH>
-                                <TH display={["none", "table-cell"]}></TH>
-                            </TR>
-                        </THead>
-                        <TBody>
-                            {claims.map((claim) => (
-                                <ClaimRow key={claim.id} claim={claim} />
-                            ))}
-                        </TBody>
-                    </Table>
-                </TableContainer>
-            ) : null}
+            <Flex justify="space-between" my={6}>
+                <Button
+                    as={RouterLink}
+                    leftIcon="add"
+                    variantColor="indigo"
+                    to="/costClaims/new"
+                >
+                    Luo uusi
+                </Button>
+                <ViewOptions onChange={setViewOptions} />
+            </Flex>
+            <ErrorDisplay error={error} />
+            <TableContainer>
+                <Table>
+                    <THead>
+                        <TR>
+                            <TH textAlign="left">Kuvaus</TH>
+                            <TH
+                                display={["none", "table-cell"]}
+                                textAlign="left"
+                            >
+                                Tekijä
+                            </TH>
+                            <TH textAlign="center">Luotu</TH>
+                            <TH textAlign="right">Summa</TH>
+                            <TH textAlign="right">Tila</TH>
+                            <TH display={["none", "table-cell"]}></TH>
+                        </TR>
+                    </THead>
+                    <TBody>
+                        {claims.map((claim) => (
+                            <ClaimRow key={claim.id} claim={claim} />
+                        ))}
+                    </TBody>
+                </Table>
+                <Empty visible={!claims.length} />
+                <Pagination
+                    offset={offset}
+                    onChange={setOffset}
+                    limit={limit}
+                    isLoading={fetching}
+                    total={data && data.costClaims.totalCount}
+                />
+            </TableContainer>
         </Box>
     );
 };

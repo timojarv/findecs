@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link, Redirect } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 
 import {
     Flex,
@@ -10,11 +10,11 @@ import {
     MenuItem,
     Button,
     Image,
-    useToast,
 } from "@chakra-ui/core";
 import { Menu as Hamburger, X } from "react-feather";
 import FindecsLogo from "../resources/logo.svg";
 import { useMutation } from "urql";
+import { useMessage } from "../util/message";
 
 const mutation = `
     mutation Logout {
@@ -23,7 +23,14 @@ const mutation = `
 `;
 
 const NavItem = (props) => (
-    <Button variant="ghost" to={props.to} as={Link} mt={[1, 0]}>
+    <Button
+        as={Link}
+        to={props.to}
+        variant="ghost"
+        mt={[1, 0]}
+        mr={[0, 2]}
+        variantColor={props.path.startsWith(props.to) ? "indigo" : undefined}
+    >
         {props.children}
     </Button>
 );
@@ -34,23 +41,24 @@ const Navigation = (props) => {
 
     const [open, setOpen] = useState(false);
     const [_, logout] = useMutation(mutation);
-    const toast = useToast();
+    const { infoMessage } = useMessage();
 
     const handleToggle = () => setOpen(!open);
 
     const handleLogout = () => {
         logout().then(() => {
             setUser(null);
-            toast({
-                position: "top",
-                title: "Kirjauduttu ulos",
-            });
+            infoMessage("Kirjauduttu ulos");
         });
     };
 
     if (path.endsWith("print")) {
         return null;
     }
+
+    useEffect(() => {
+        setOpen(false);
+    }, [path]);
 
     return (
         <Flex
@@ -64,7 +72,7 @@ const Navigation = (props) => {
             borderColor="gray.200"
             {...props}
         >
-            <Flex align="center" mx={3}>
+            <Flex as={Link} to="/" align="center" mx={3}>
                 <Image as={FindecsLogo} size={12} />
             </Flex>
 
@@ -83,9 +91,15 @@ const Navigation = (props) => {
                 flexGrow={1}
                 flexDirection={["column", "row"]}
             >
-                <NavItem to="/costClaims">Kulukorvaukset</NavItem>
-                <NavItem to="/purchaseInvoices">Ostolaskut</NavItem>
-                <NavItem to="/salesInvoices">Myyntilaskut</NavItem>
+                <NavItem path={path} to="/costClaims">
+                    Kulukorvaukset
+                </NavItem>
+                <NavItem path={path} to="/purchaseInvoices">
+                    Ostolaskut
+                </NavItem>
+                <NavItem path={path} to="/salesInvoices">
+                    Myyntilaskut
+                </NavItem>
                 <Menu>
                     <MenuButton
                         as={Button}

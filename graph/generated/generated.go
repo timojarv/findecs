@@ -65,7 +65,7 @@ type ComplexityRoot struct {
 	}
 
 	CostClaim struct {
-		AcceptedBy    func(childComplexity int) int
+		ApprovedBy    func(childComplexity int) int
 		Author        func(childComplexity int) int
 		CostPool      func(childComplexity int) int
 		Created       func(childComplexity int) int
@@ -73,11 +73,17 @@ type ComplexityRoot struct {
 		Details       func(childComplexity int) int
 		ID            func(childComplexity int) int
 		Modified      func(childComplexity int) int
+		OtherIBAN     func(childComplexity int) int
 		Receipts      func(childComplexity int) int
 		RunningNumber func(childComplexity int) int
 		SourceOfMoney func(childComplexity int) int
 		Status        func(childComplexity int) int
 		Total         func(childComplexity int) int
+	}
+
+	CostClaimsConnection struct {
+		Nodes      func(childComplexity int) int
+		TotalCount func(childComplexity int) int
 	}
 
 	CostPool struct {
@@ -88,6 +94,11 @@ type ComplexityRoot struct {
 		PurchaseInvoices func(childComplexity int) int
 		SalesInvoices    func(childComplexity int) int
 		Total            func(childComplexity int) int
+	}
+
+	CostPoolsConnection struct {
+		Nodes      func(childComplexity int) int
+		TotalCount func(childComplexity int) int
 	}
 
 	Mutation struct {
@@ -116,6 +127,8 @@ type ComplexityRoot struct {
 	}
 
 	PurchaseInvoice struct {
+		ApprovedBy  func(childComplexity int) int
+		Author      func(childComplexity int) int
 		Created     func(childComplexity int) int
 		Description func(childComplexity int) int
 		Details     func(childComplexity int) int
@@ -146,15 +159,14 @@ type ComplexityRoot struct {
 		Contact          func(childComplexity int, id string) int
 		Contacts         func(childComplexity int, limit *int, offset int, searchTerm *string) int
 		CostClaim        func(childComplexity int, id string) int
-		CostClaimCount   func(childComplexity int) int
-		CostClaims       func(childComplexity int, limit *int, offset int) int
+		CostClaims       func(childComplexity int, limit *int, offset int, viewOptions *model.ViewOptions) int
 		CostPool         func(childComplexity int, id string) int
-		CostPoolCount    func(childComplexity int) int
 		CostPools        func(childComplexity int, limit *int, offset int) int
 		PurchaseInvoice  func(childComplexity int, id string) int
-		PurchaseInvoices func(childComplexity int, limit *int, offset int) int
+		PurchaseInvoices func(childComplexity int, limit *int, offset int, viewOptions *model.ViewOptions) int
 		SalesInvoice     func(childComplexity int, id string) int
-		SalesInvoices    func(childComplexity int, limit *int, offset int) int
+		SalesInvoices    func(childComplexity int, limit *int, offset int, viewOptions *model.ViewOptions) int
+		SystemInfo       func(childComplexity int) int
 		User             func(childComplexity int, id *string) int
 		Users            func(childComplexity int, limit *int, offset int) int
 	}
@@ -167,11 +179,14 @@ type ComplexityRoot struct {
 	}
 
 	SalesInvoice struct {
+		Author         func(childComplexity int) int
 		ContactPerson  func(childComplexity int) int
+		Created        func(childComplexity int) int
 		Date           func(childComplexity int) int
 		Details        func(childComplexity int) int
 		DueDate        func(childComplexity int) int
 		ID             func(childComplexity int) int
+		Modified       func(childComplexity int) int
 		PayerReference func(childComplexity int) int
 		Recipient      func(childComplexity int) int
 		Rows           func(childComplexity int) int
@@ -193,14 +208,24 @@ type ComplexityRoot struct {
 		TotalCount func(childComplexity int) int
 	}
 
+	SystemInfo struct {
+		Database      func(childComplexity int) int
+		ServerVersion func(childComplexity int) int
+	}
+
 	User struct {
-		Email       func(childComplexity int) int
-		HasPassword func(childComplexity int) int
-		ID          func(childComplexity int) int
-		Name        func(childComplexity int) int
-		Position    func(childComplexity int) int
-		Role        func(childComplexity int) int
-		Signature   func(childComplexity int) int
+		CostClaims       func(childComplexity int) int
+		Email            func(childComplexity int) int
+		HasPassword      func(childComplexity int) int
+		ID               func(childComplexity int) int
+		Iban             func(childComplexity int) int
+		Name             func(childComplexity int) int
+		Phone            func(childComplexity int) int
+		Position         func(childComplexity int) int
+		PurchaseInvoices func(childComplexity int) int
+		Role             func(childComplexity int) int
+		SalesInvoices    func(childComplexity int) int
+		Signature        func(childComplexity int) int
 	}
 }
 
@@ -212,7 +237,7 @@ type CostClaimResolver interface {
 	Author(ctx context.Context, obj *model.CostClaim) (*model.User, error)
 	CostPool(ctx context.Context, obj *model.CostClaim) (*model.CostPool, error)
 
-	AcceptedBy(ctx context.Context, obj *model.CostClaim) (*model.User, error)
+	ApprovedBy(ctx context.Context, obj *model.CostClaim) (*model.User, error)
 
 	Receipts(ctx context.Context, obj *model.CostClaim) ([]*model.Receipt, error)
 	Total(ctx context.Context, obj *model.CostClaim) (float64, error)
@@ -248,7 +273,10 @@ type MutationResolver interface {
 	DeleteSalesInvoice(ctx context.Context, id string) (string, error)
 }
 type PurchaseInvoiceResolver interface {
+	Author(ctx context.Context, obj *model.PurchaseInvoice) (*model.User, error)
 	Sender(ctx context.Context, obj *model.PurchaseInvoice) (*model.Contact, error)
+
+	ApprovedBy(ctx context.Context, obj *model.PurchaseInvoice) (*model.User, error)
 
 	Rows(ctx context.Context, obj *model.PurchaseInvoice) ([]*model.PurchaseInvoiceRow, error)
 	Total(ctx context.Context, obj *model.PurchaseInvoice) (float64, error)
@@ -258,22 +286,23 @@ type PurchaseInvoiceRowResolver interface {
 	CostPool(ctx context.Context, obj *model.PurchaseInvoiceRow) (*model.CostPool, error)
 }
 type QueryResolver interface {
-	CostClaims(ctx context.Context, limit *int, offset int) ([]*model.CostClaim, error)
-	CostClaimCount(ctx context.Context) (int, error)
+	CostClaims(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions) (*model.CostClaimsConnection, error)
 	CostClaim(ctx context.Context, id string) (*model.CostClaim, error)
 	User(ctx context.Context, id *string) (*model.User, error)
 	Users(ctx context.Context, limit *int, offset int) ([]*model.User, error)
-	CostPools(ctx context.Context, limit *int, offset int) ([]*model.CostPool, error)
-	CostPoolCount(ctx context.Context) (int, error)
+	CostPools(ctx context.Context, limit *int, offset int) (*model.CostPoolsConnection, error)
 	CostPool(ctx context.Context, id string) (*model.CostPool, error)
 	Contacts(ctx context.Context, limit *int, offset int, searchTerm *string) (*model.ContactsConnection, error)
 	Contact(ctx context.Context, id string) (*model.Contact, error)
-	PurchaseInvoices(ctx context.Context, limit *int, offset int) (*model.PurchaseInvoicesConnection, error)
+	PurchaseInvoices(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions) (*model.PurchaseInvoicesConnection, error)
 	PurchaseInvoice(ctx context.Context, id string) (*model.PurchaseInvoice, error)
-	SalesInvoices(ctx context.Context, limit *int, offset int) (*model.SalesInvoicesConnection, error)
+	SalesInvoices(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions) (*model.SalesInvoicesConnection, error)
 	SalesInvoice(ctx context.Context, id string) (*model.SalesInvoice, error)
+	SystemInfo(ctx context.Context) (*model.SystemInfo, error)
 }
 type SalesInvoiceResolver interface {
+	Author(ctx context.Context, obj *model.SalesInvoice) (*model.User, error)
+	RunningNumber(ctx context.Context, obj *model.SalesInvoice) (int, error)
 	Recipient(ctx context.Context, obj *model.SalesInvoice) (*model.Contact, error)
 
 	Rows(ctx context.Context, obj *model.SalesInvoice) ([]*model.SalesInvoiceRow, error)
@@ -284,9 +313,11 @@ type SalesInvoiceRowResolver interface {
 	CostPool(ctx context.Context, obj *model.SalesInvoiceRow) (*model.CostPool, error)
 }
 type UserResolver interface {
-	Position(ctx context.Context, obj *model.User) (string, error)
-
 	HasPassword(ctx context.Context, obj *model.User) (bool, error)
+
+	CostClaims(ctx context.Context, obj *model.User) ([]*model.CostClaim, error)
+	PurchaseInvoices(ctx context.Context, obj *model.User) ([]*model.PurchaseInvoice, error)
+	SalesInvoices(ctx context.Context, obj *model.User) ([]*model.SalesInvoice, error)
 }
 
 type executableSchema struct {
@@ -353,12 +384,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.ContactsConnection.TotalCount(childComplexity), true
 
-	case "CostClaim.acceptedBy":
-		if e.complexity.CostClaim.AcceptedBy == nil {
+	case "CostClaim.approvedBy":
+		if e.complexity.CostClaim.ApprovedBy == nil {
 			break
 		}
 
-		return e.complexity.CostClaim.AcceptedBy(childComplexity), true
+		return e.complexity.CostClaim.ApprovedBy(childComplexity), true
 
 	case "CostClaim.author":
 		if e.complexity.CostClaim.Author == nil {
@@ -409,6 +440,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.CostClaim.Modified(childComplexity), true
 
+	case "CostClaim.otherIban":
+		if e.complexity.CostClaim.OtherIBAN == nil {
+			break
+		}
+
+		return e.complexity.CostClaim.OtherIBAN(childComplexity), true
+
 	case "CostClaim.receipts":
 		if e.complexity.CostClaim.Receipts == nil {
 			break
@@ -443,6 +481,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.CostClaim.Total(childComplexity), true
+
+	case "CostClaimsConnection.nodes":
+		if e.complexity.CostClaimsConnection.Nodes == nil {
+			break
+		}
+
+		return e.complexity.CostClaimsConnection.Nodes(childComplexity), true
+
+	case "CostClaimsConnection.totalCount":
+		if e.complexity.CostClaimsConnection.TotalCount == nil {
+			break
+		}
+
+		return e.complexity.CostClaimsConnection.TotalCount(childComplexity), true
 
 	case "CostPool.budget":
 		if e.complexity.CostPool.Budget == nil {
@@ -492,6 +544,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.CostPool.Total(childComplexity), true
+
+	case "CostPoolsConnection.nodes":
+		if e.complexity.CostPoolsConnection.Nodes == nil {
+			break
+		}
+
+		return e.complexity.CostPoolsConnection.Nodes(childComplexity), true
+
+	case "CostPoolsConnection.totalCount":
+		if e.complexity.CostPoolsConnection.TotalCount == nil {
+			break
+		}
+
+		return e.complexity.CostPoolsConnection.TotalCount(childComplexity), true
 
 	case "Mutation.createContact":
 		if e.complexity.Mutation.CreateContact == nil {
@@ -752,6 +818,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.UpdateUser(childComplexity, args["id"].(string), args["user"].(model.UserInput)), true
 
+	case "PurchaseInvoice.approvedBy":
+		if e.complexity.PurchaseInvoice.ApprovedBy == nil {
+			break
+		}
+
+		return e.complexity.PurchaseInvoice.ApprovedBy(childComplexity), true
+
+	case "PurchaseInvoice.author":
+		if e.complexity.PurchaseInvoice.Author == nil {
+			break
+		}
+
+		return e.complexity.PurchaseInvoice.Author(childComplexity), true
+
 	case "PurchaseInvoice.created":
 		if e.complexity.PurchaseInvoice.Created == nil {
 			break
@@ -914,13 +994,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.CostClaim(childComplexity, args["id"].(string)), true
 
-	case "Query.costClaimCount":
-		if e.complexity.Query.CostClaimCount == nil {
-			break
-		}
-
-		return e.complexity.Query.CostClaimCount(childComplexity), true
-
 	case "Query.costClaims":
 		if e.complexity.Query.CostClaims == nil {
 			break
@@ -931,7 +1004,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.CostClaims(childComplexity, args["limit"].(*int), args["offset"].(int)), true
+		return e.complexity.Query.CostClaims(childComplexity, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions)), true
 
 	case "Query.costPool":
 		if e.complexity.Query.CostPool == nil {
@@ -944,13 +1017,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.CostPool(childComplexity, args["id"].(string)), true
-
-	case "Query.costPoolCount":
-		if e.complexity.Query.CostPoolCount == nil {
-			break
-		}
-
-		return e.complexity.Query.CostPoolCount(childComplexity), true
 
 	case "Query.costPools":
 		if e.complexity.Query.CostPools == nil {
@@ -986,7 +1052,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.PurchaseInvoices(childComplexity, args["limit"].(*int), args["offset"].(int)), true
+		return e.complexity.Query.PurchaseInvoices(childComplexity, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions)), true
 
 	case "Query.salesInvoice":
 		if e.complexity.Query.SalesInvoice == nil {
@@ -1010,7 +1076,14 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.SalesInvoices(childComplexity, args["limit"].(*int), args["offset"].(int)), true
+		return e.complexity.Query.SalesInvoices(childComplexity, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions)), true
+
+	case "Query.systemInfo":
+		if e.complexity.Query.SystemInfo == nil {
+			break
+		}
+
+		return e.complexity.Query.SystemInfo(childComplexity), true
 
 	case "Query.user":
 		if e.complexity.Query.User == nil {
@@ -1064,12 +1137,26 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Receipt.ID(childComplexity), true
 
+	case "SalesInvoice.author":
+		if e.complexity.SalesInvoice.Author == nil {
+			break
+		}
+
+		return e.complexity.SalesInvoice.Author(childComplexity), true
+
 	case "SalesInvoice.contactPerson":
 		if e.complexity.SalesInvoice.ContactPerson == nil {
 			break
 		}
 
 		return e.complexity.SalesInvoice.ContactPerson(childComplexity), true
+
+	case "SalesInvoice.created":
+		if e.complexity.SalesInvoice.Created == nil {
+			break
+		}
+
+		return e.complexity.SalesInvoice.Created(childComplexity), true
 
 	case "SalesInvoice.date":
 		if e.complexity.SalesInvoice.Date == nil {
@@ -1098,6 +1185,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.SalesInvoice.ID(childComplexity), true
+
+	case "SalesInvoice.modified":
+		if e.complexity.SalesInvoice.Modified == nil {
+			break
+		}
+
+		return e.complexity.SalesInvoice.Modified(childComplexity), true
 
 	case "SalesInvoice.payerReference":
 		if e.complexity.SalesInvoice.PayerReference == nil {
@@ -1190,6 +1284,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.SalesInvoicesConnection.TotalCount(childComplexity), true
 
+	case "SystemInfo.database":
+		if e.complexity.SystemInfo.Database == nil {
+			break
+		}
+
+		return e.complexity.SystemInfo.Database(childComplexity), true
+
+	case "SystemInfo.serverVersion":
+		if e.complexity.SystemInfo.ServerVersion == nil {
+			break
+		}
+
+		return e.complexity.SystemInfo.ServerVersion(childComplexity), true
+
+	case "User.costClaims":
+		if e.complexity.User.CostClaims == nil {
+			break
+		}
+
+		return e.complexity.User.CostClaims(childComplexity), true
+
 	case "User.email":
 		if e.complexity.User.Email == nil {
 			break
@@ -1211,12 +1326,26 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.User.ID(childComplexity), true
 
+	case "User.iban":
+		if e.complexity.User.Iban == nil {
+			break
+		}
+
+		return e.complexity.User.Iban(childComplexity), true
+
 	case "User.name":
 		if e.complexity.User.Name == nil {
 			break
 		}
 
 		return e.complexity.User.Name(childComplexity), true
+
+	case "User.phone":
+		if e.complexity.User.Phone == nil {
+			break
+		}
+
+		return e.complexity.User.Phone(childComplexity), true
 
 	case "User.position":
 		if e.complexity.User.Position == nil {
@@ -1225,12 +1354,26 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.User.Position(childComplexity), true
 
+	case "User.purchaseInvoices":
+		if e.complexity.User.PurchaseInvoices == nil {
+			break
+		}
+
+		return e.complexity.User.PurchaseInvoices(childComplexity), true
+
 	case "User.role":
 		if e.complexity.User.Role == nil {
 			break
 		}
 
 		return e.complexity.User.Role(childComplexity), true
+
+	case "User.salesInvoices":
+		if e.complexity.User.SalesInvoices == nil {
+			break
+		}
+
+		return e.complexity.User.SalesInvoices(childComplexity), true
 
 	case "User.signature":
 		if e.complexity.User.Signature == nil {
@@ -1326,6 +1469,16 @@ scalar Date
 scalar DateTime
 scalar Upload
 
+type SystemInfo {
+    database: String!
+    serverVersion: String!
+}
+
+input ViewOptions {
+    author: String!
+    status: String!
+}
+
 type User {
     id: ID!
     name: String!
@@ -1334,6 +1487,11 @@ type User {
     position: String!
     role: UserRole!
     hasPassword: Boolean!
+    phone: String
+    iban: String
+    costClaims: [CostClaim!]!
+    purchaseInvoices: [PurchaseInvoice!]!
+    salesInvoices: [SalesInvoice!]!
 }
 
 input UserInput {
@@ -1349,6 +1507,8 @@ input SettingsInput {
     position: String!
     signature: Upload
     newPassword: String
+    phone: String!
+    iban: String!
 }
 
 type Receipt {
@@ -1380,6 +1540,11 @@ input CostPoolInput {
     budget: Float!
 }
 
+type CostPoolsConnection {
+    nodes: [CostPool!]!
+    totalCount: Int!
+}
+
 type CostClaim {
     id: ID!
     runningNumber: Int!
@@ -1390,18 +1555,24 @@ type CostClaim {
     details: String
     created: DateTime!
     modified: DateTime
-    acceptedBy: User
+    approvedBy: User
     sourceOfMoney: SourceOfMoney!
+    otherIban: String
     receipts: [Receipt!]!
     total: Float!
 }
 
 input CostClaimInput {
     description: String!
-    author: ID!
     costPool: ID!
     details: String
     sourceOfMoney: SourceOfMoney!
+    otherIban: String
+}
+
+type CostClaimsConnection {
+    nodes: [CostClaim!]!
+    totalCount: Int!
 }
 
 type Contact {
@@ -1423,6 +1594,7 @@ type ContactsConnection {
 }
 
 input InvoiceRowInput {
+    id: ID
     costPool: ID!
     description: String!
     amount: Float!
@@ -1438,10 +1610,13 @@ type SalesInvoiceRow {
 
 type SalesInvoice {
     id: ID!
+    author: User!
     runningNumber: Int!
     recipient: Contact!
     date: Date!
     dueDate: Date!
+    created: DateTime!
+    modified: DateTime
     status: Status!
     details: String
     payerReference: String
@@ -1474,10 +1649,12 @@ type PurchaseInvoiceRow {
 
 type PurchaseInvoice {
     id: ID!
+    author: User!
     sender: Contact!
     description: String!
     dueDate: Date!
     status: Status!
+    approvedBy: User
     created: DateTime!
     modified: DateTime
     details: String
@@ -1499,15 +1676,17 @@ type PurchaseInvoicesConnection {
 }
 
 type Query {
-    costClaims(limit: Int = 20, offset: Int! = 0): [CostClaim!]!
-    costClaimCount: Int!
+    costClaims(
+        limit: Int = 20
+        offset: Int! = 0
+        viewOptions: ViewOptions
+    ): CostClaimsConnection!
     costClaim(id: ID!): CostClaim
 
     user(id: ID): User!
     users(limit: Int = 20, offset: Int! = 0): [User!]!
 
-    costPools(limit: Int = 20, offset: Int! = 0): [CostPool!]!
-    costPoolCount: Int!
+    costPools(limit: Int = 20, offset: Int! = 0): CostPoolsConnection!
     costPool(id: ID!): CostPool!
 
     contacts(
@@ -1520,11 +1699,18 @@ type Query {
     purchaseInvoices(
         limit: Int = 20
         offset: Int! = 0
+        viewOptions: ViewOptions
     ): PurchaseInvoicesConnection!
     purchaseInvoice(id: ID!): PurchaseInvoice!
 
-    salesInvoices(limit: Int = 20, offset: Int! = 0): SalesInvoicesConnection!
+    salesInvoices(
+        limit: Int = 20
+        offset: Int! = 0
+        viewOptions: ViewOptions
+    ): SalesInvoicesConnection!
     salesInvoice(id: ID!): SalesInvoice!
+
+    systemInfo: SystemInfo!
 }
 
 type Mutation {
@@ -2083,6 +2269,14 @@ func (ec *executionContext) field_Query_costClaims_args(ctx context.Context, raw
 		}
 	}
 	args["offset"] = arg1
+	var arg2 *model.ViewOptions
+	if tmp, ok := rawArgs["viewOptions"]; ok {
+		arg2, err = ec.unmarshalOViewOptions2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐViewOptions(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["viewOptions"] = arg2
 	return args, nil
 }
 
@@ -2155,6 +2349,14 @@ func (ec *executionContext) field_Query_purchaseInvoices_args(ctx context.Contex
 		}
 	}
 	args["offset"] = arg1
+	var arg2 *model.ViewOptions
+	if tmp, ok := rawArgs["viewOptions"]; ok {
+		arg2, err = ec.unmarshalOViewOptions2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐViewOptions(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["viewOptions"] = arg2
 	return args, nil
 }
 
@@ -2191,6 +2393,14 @@ func (ec *executionContext) field_Query_salesInvoices_args(ctx context.Context, 
 		}
 	}
 	args["offset"] = arg1
+	var arg2 *model.ViewOptions
+	if tmp, ok := rawArgs["viewOptions"]; ok {
+		arg2, err = ec.unmarshalOViewOptions2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐViewOptions(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["viewOptions"] = arg2
 	return args, nil
 }
 
@@ -2804,7 +3014,7 @@ func (ec *executionContext) _CostClaim_modified(ctx context.Context, field graph
 	return ec.marshalODateTime2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _CostClaim_acceptedBy(ctx context.Context, field graphql.CollectedField, obj *model.CostClaim) (ret graphql.Marshaler) {
+func (ec *executionContext) _CostClaim_approvedBy(ctx context.Context, field graphql.CollectedField, obj *model.CostClaim) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2821,7 +3031,7 @@ func (ec *executionContext) _CostClaim_acceptedBy(ctx context.Context, field gra
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.CostClaim().AcceptedBy(rctx, obj)
+		return ec.resolvers.CostClaim().ApprovedBy(rctx, obj)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2867,6 +3077,37 @@ func (ec *executionContext) _CostClaim_sourceOfMoney(ctx context.Context, field 
 	res := resTmp.(model.SourceOfMoney)
 	fc.Result = res
 	return ec.marshalNSourceOfMoney2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSourceOfMoney(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CostClaim_otherIban(ctx context.Context, field graphql.CollectedField, obj *model.CostClaim) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "CostClaim",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.OtherIBAN, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _CostClaim_receipts(ctx context.Context, field graphql.CollectedField, obj *model.CostClaim) (ret graphql.Marshaler) {
@@ -2935,6 +3176,74 @@ func (ec *executionContext) _CostClaim_total(ctx context.Context, field graphql.
 	res := resTmp.(float64)
 	fc.Result = res
 	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CostClaimsConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *model.CostClaimsConnection) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "CostClaimsConnection",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Nodes, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.CostClaim)
+	fc.Result = res
+	return ec.marshalNCostClaim2ᚕᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐCostClaimᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CostClaimsConnection_totalCount(ctx context.Context, field graphql.CollectedField, obj *model.CostClaimsConnection) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "CostClaimsConnection",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalCount, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _CostPool_id(ctx context.Context, field graphql.CollectedField, obj *model.CostPool) (ret graphql.Marshaler) {
@@ -3173,6 +3482,74 @@ func (ec *executionContext) _CostPool_purchaseInvoices(ctx context.Context, fiel
 	res := resTmp.([]*model.PurchaseInvoice)
 	fc.Result = res
 	return ec.marshalNPurchaseInvoice2ᚕᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐPurchaseInvoiceᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CostPoolsConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *model.CostPoolsConnection) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "CostPoolsConnection",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Nodes, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.CostPool)
+	fc.Result = res
+	return ec.marshalNCostPool2ᚕᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐCostPoolᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CostPoolsConnection_totalCount(ctx context.Context, field graphql.CollectedField, obj *model.CostPoolsConnection) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "CostPoolsConnection",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalCount, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Mutation_createUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -4104,6 +4481,40 @@ func (ec *executionContext) _PurchaseInvoice_id(ctx context.Context, field graph
 	return ec.marshalNID2string(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _PurchaseInvoice_author(ctx context.Context, field graphql.CollectedField, obj *model.PurchaseInvoice) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "PurchaseInvoice",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.PurchaseInvoice().Author(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.User)
+	fc.Result = res
+	return ec.marshalNUser2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐUser(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _PurchaseInvoice_sender(ctx context.Context, field graphql.CollectedField, obj *model.PurchaseInvoice) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -4238,6 +4649,37 @@ func (ec *executionContext) _PurchaseInvoice_status(ctx context.Context, field g
 	res := resTmp.(model.Status)
 	fc.Result = res
 	return ec.marshalNStatus2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐStatus(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _PurchaseInvoice_approvedBy(ctx context.Context, field graphql.CollectedField, obj *model.PurchaseInvoice) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "PurchaseInvoice",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.PurchaseInvoice().ApprovedBy(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.User)
+	fc.Result = res
+	return ec.marshalOUser2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐUser(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _PurchaseInvoice_created(ctx context.Context, field graphql.CollectedField, obj *model.PurchaseInvoice) (ret graphql.Marshaler) {
@@ -4697,7 +5139,7 @@ func (ec *executionContext) _Query_costClaims(ctx context.Context, field graphql
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().CostClaims(rctx, args["limit"].(*int), args["offset"].(int))
+		return ec.resolvers.Query().CostClaims(rctx, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -4709,43 +5151,9 @@ func (ec *executionContext) _Query_costClaims(ctx context.Context, field graphql
 		}
 		return graphql.Null
 	}
-	res := resTmp.([]*model.CostClaim)
+	res := resTmp.(*model.CostClaimsConnection)
 	fc.Result = res
-	return ec.marshalNCostClaim2ᚕᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐCostClaimᚄ(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_costClaimCount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:   "Query",
-		Field:    field,
-		Args:     nil,
-		IsMethod: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().CostClaimCount(rctx)
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(int)
-	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
+	return ec.marshalNCostClaimsConnection2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐCostClaimsConnection(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_costClaim(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -4904,43 +5312,9 @@ func (ec *executionContext) _Query_costPools(ctx context.Context, field graphql.
 		}
 		return graphql.Null
 	}
-	res := resTmp.([]*model.CostPool)
+	res := resTmp.(*model.CostPoolsConnection)
 	fc.Result = res
-	return ec.marshalNCostPool2ᚕᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐCostPoolᚄ(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_costPoolCount(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:   "Query",
-		Field:    field,
-		Args:     nil,
-		IsMethod: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().CostPoolCount(rctx)
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(int)
-	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
+	return ec.marshalNCostPoolsConnection2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐCostPoolsConnection(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_costPool(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -5090,7 +5464,7 @@ func (ec *executionContext) _Query_purchaseInvoices(ctx context.Context, field g
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().PurchaseInvoices(rctx, args["limit"].(*int), args["offset"].(int))
+		return ec.resolvers.Query().PurchaseInvoices(rctx, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -5172,7 +5546,7 @@ func (ec *executionContext) _Query_salesInvoices(ctx context.Context, field grap
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().SalesInvoices(rctx, args["limit"].(*int), args["offset"].(int))
+		return ec.resolvers.Query().SalesInvoices(rctx, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -5228,6 +5602,40 @@ func (ec *executionContext) _Query_salesInvoice(ctx context.Context, field graph
 	res := resTmp.(*model.SalesInvoice)
 	fc.Result = res
 	return ec.marshalNSalesInvoice2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSalesInvoice(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_systemInfo(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "Query",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().SystemInfo(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.SystemInfo)
+	fc.Result = res
+	return ec.marshalNSystemInfo2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSystemInfo(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -5469,6 +5877,40 @@ func (ec *executionContext) _SalesInvoice_id(ctx context.Context, field graphql.
 	return ec.marshalNID2string(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _SalesInvoice_author(ctx context.Context, field graphql.CollectedField, obj *model.SalesInvoice) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "SalesInvoice",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.SalesInvoice().Author(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.User)
+	fc.Result = res
+	return ec.marshalNUser2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐUser(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _SalesInvoice_runningNumber(ctx context.Context, field graphql.CollectedField, obj *model.SalesInvoice) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -5480,13 +5922,13 @@ func (ec *executionContext) _SalesInvoice_runningNumber(ctx context.Context, fie
 		Object:   "SalesInvoice",
 		Field:    field,
 		Args:     nil,
-		IsMethod: false,
+		IsMethod: true,
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.RunningNumber, nil
+		return ec.resolvers.SalesInvoice().RunningNumber(rctx, obj)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -5603,6 +6045,71 @@ func (ec *executionContext) _SalesInvoice_dueDate(ctx context.Context, field gra
 	res := resTmp.(string)
 	fc.Result = res
 	return ec.marshalNDate2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _SalesInvoice_created(ctx context.Context, field graphql.CollectedField, obj *model.SalesInvoice) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "SalesInvoice",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Created, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNDateTime2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _SalesInvoice_modified(ctx context.Context, field graphql.CollectedField, obj *model.SalesInvoice) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "SalesInvoice",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Modified, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalODateTime2ᚖstring(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _SalesInvoice_status(ctx context.Context, field graphql.CollectedField, obj *model.SalesInvoice) (ret graphql.Marshaler) {
@@ -6038,6 +6545,74 @@ func (ec *executionContext) _SalesInvoicesConnection_totalCount(ctx context.Cont
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _SystemInfo_database(ctx context.Context, field graphql.CollectedField, obj *model.SystemInfo) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "SystemInfo",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Database, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _SystemInfo_serverVersion(ctx context.Context, field graphql.CollectedField, obj *model.SystemInfo) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "SystemInfo",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ServerVersion, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _User_id(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -6182,13 +6757,13 @@ func (ec *executionContext) _User_position(ctx context.Context, field graphql.Co
 		Object:   "User",
 		Field:    field,
 		Args:     nil,
-		IsMethod: true,
+		IsMethod: false,
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.User().Position(rctx, obj)
+		return obj.Position, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -6271,6 +6846,170 @@ func (ec *executionContext) _User_hasPassword(ctx context.Context, field graphql
 	res := resTmp.(bool)
 	fc.Result = res
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _User_phone(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "User",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Phone, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _User_iban(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "User",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Iban, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _User_costClaims(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "User",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.User().CostClaims(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.CostClaim)
+	fc.Result = res
+	return ec.marshalNCostClaim2ᚕᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐCostClaimᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _User_purchaseInvoices(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "User",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.User().PurchaseInvoices(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.PurchaseInvoice)
+	fc.Result = res
+	return ec.marshalNPurchaseInvoice2ᚕᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐPurchaseInvoiceᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _User_salesInvoices(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "User",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.User().SalesInvoices(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.SalesInvoice)
+	fc.Result = res
+	return ec.marshalNSalesInvoice2ᚕᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSalesInvoiceᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql.CollectedField, obj *introspection.Directive) (ret graphql.Marshaler) {
@@ -7364,12 +8103,6 @@ func (ec *executionContext) unmarshalInputCostClaimInput(ctx context.Context, ob
 			if err != nil {
 				return it, err
 			}
-		case "author":
-			var err error
-			it.Author, err = ec.unmarshalNID2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
 		case "costPool":
 			var err error
 			it.CostPool, err = ec.unmarshalNID2string(ctx, v)
@@ -7385,6 +8118,12 @@ func (ec *executionContext) unmarshalInputCostClaimInput(ctx context.Context, ob
 		case "sourceOfMoney":
 			var err error
 			it.SourceOfMoney, err = ec.unmarshalNSourceOfMoney2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSourceOfMoney(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "otherIban":
+			var err error
+			it.OtherIBAN, err = ec.unmarshalOString2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -7424,6 +8163,12 @@ func (ec *executionContext) unmarshalInputInvoiceRowInput(ctx context.Context, o
 
 	for k, v := range asMap {
 		switch k {
+		case "id":
+			var err error
+			it.ID, err = ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
 		case "costPool":
 			var err error
 			it.CostPool, err = ec.unmarshalNID2string(ctx, v)
@@ -7604,6 +8349,18 @@ func (ec *executionContext) unmarshalInputSettingsInput(ctx context.Context, obj
 			if err != nil {
 				return it, err
 			}
+		case "phone":
+			var err error
+			it.Phone, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "iban":
+			var err error
+			it.Iban, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
 		}
 	}
 
@@ -7637,6 +8394,30 @@ func (ec *executionContext) unmarshalInputUserInput(ctx context.Context, obj int
 		case "password":
 			var err error
 			it.Password, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputViewOptions(ctx context.Context, obj interface{}) (model.ViewOptions, error) {
+	var it model.ViewOptions
+	var asMap = obj.(map[string]interface{})
+
+	for k, v := range asMap {
+		switch k {
+		case "author":
+			var err error
+			it.Author, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "status":
+			var err error
+			it.Status, err = ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -7819,7 +8600,7 @@ func (ec *executionContext) _CostClaim(ctx context.Context, sel ast.SelectionSet
 			}
 		case "modified":
 			out.Values[i] = ec._CostClaim_modified(ctx, field, obj)
-		case "acceptedBy":
+		case "approvedBy":
 			field := field
 			out.Concurrently(i, func() (res graphql.Marshaler) {
 				defer func() {
@@ -7827,7 +8608,7 @@ func (ec *executionContext) _CostClaim(ctx context.Context, sel ast.SelectionSet
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._CostClaim_acceptedBy(ctx, field, obj)
+				res = ec._CostClaim_approvedBy(ctx, field, obj)
 				return res
 			})
 		case "sourceOfMoney":
@@ -7835,6 +8616,8 @@ func (ec *executionContext) _CostClaim(ctx context.Context, sel ast.SelectionSet
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&invalids, 1)
 			}
+		case "otherIban":
+			out.Values[i] = ec._CostClaim_otherIban(ctx, field, obj)
 		case "receipts":
 			field := field
 			out.Concurrently(i, func() (res graphql.Marshaler) {
@@ -7863,6 +8646,38 @@ func (ec *executionContext) _CostClaim(ctx context.Context, sel ast.SelectionSet
 				}
 				return res
 			})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var costClaimsConnectionImplementors = []string{"CostClaimsConnection"}
+
+func (ec *executionContext) _CostClaimsConnection(ctx context.Context, sel ast.SelectionSet, obj *model.CostClaimsConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, costClaimsConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CostClaimsConnection")
+		case "nodes":
+			out.Values[i] = ec._CostClaimsConnection_nodes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "totalCount":
+			out.Values[i] = ec._CostClaimsConnection_totalCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -7956,6 +8771,38 @@ func (ec *executionContext) _CostPool(ctx context.Context, sel ast.SelectionSet,
 				}
 				return res
 			})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var costPoolsConnectionImplementors = []string{"CostPoolsConnection"}
+
+func (ec *executionContext) _CostPoolsConnection(ctx context.Context, sel ast.SelectionSet, obj *model.CostPoolsConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, costPoolsConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CostPoolsConnection")
+		case "nodes":
+			out.Values[i] = ec._CostPoolsConnection_nodes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "totalCount":
+			out.Values[i] = ec._CostPoolsConnection_totalCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -8119,6 +8966,20 @@ func (ec *executionContext) _PurchaseInvoice(ctx context.Context, sel ast.Select
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&invalids, 1)
 			}
+		case "author":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._PurchaseInvoice_author(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
 		case "sender":
 			field := field
 			out.Concurrently(i, func() (res graphql.Marshaler) {
@@ -8148,6 +9009,17 @@ func (ec *executionContext) _PurchaseInvoice(ctx context.Context, sel ast.Select
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&invalids, 1)
 			}
+		case "approvedBy":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._PurchaseInvoice_approvedBy(ctx, field, obj)
+				return res
+			})
 		case "created":
 			out.Values[i] = ec._PurchaseInvoice_created(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -8324,20 +9196,6 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				}
 				return res
 			})
-		case "costClaimCount":
-			field := field
-			out.Concurrently(i, func() (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_costClaimCount(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			})
 		case "costClaim":
 			field := field
 			out.Concurrently(i, func() (res graphql.Marshaler) {
@@ -8386,20 +9244,6 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_costPools(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			})
-		case "costPoolCount":
-			field := field
-			out.Concurrently(i, func() (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_costPoolCount(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -8503,6 +9347,20 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				}
 				return res
 			})
+		case "systemInfo":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_systemInfo(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
 		case "__type":
 			out.Values[i] = ec._Query___type(ctx, field)
 		case "__schema":
@@ -8576,11 +9434,34 @@ func (ec *executionContext) _SalesInvoice(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&invalids, 1)
 			}
+		case "author":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._SalesInvoice_author(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
 		case "runningNumber":
-			out.Values[i] = ec._SalesInvoice_runningNumber(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&invalids, 1)
-			}
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._SalesInvoice_runningNumber(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
 		case "recipient":
 			field := field
 			out.Concurrently(i, func() (res graphql.Marshaler) {
@@ -8605,6 +9486,13 @@ func (ec *executionContext) _SalesInvoice(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&invalids, 1)
 			}
+		case "created":
+			out.Values[i] = ec._SalesInvoice_created(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&invalids, 1)
+			}
+		case "modified":
+			out.Values[i] = ec._SalesInvoice_modified(ctx, field, obj)
 		case "status":
 			out.Values[i] = ec._SalesInvoice_status(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -8752,6 +9640,38 @@ func (ec *executionContext) _SalesInvoicesConnection(ctx context.Context, sel as
 	return out
 }
 
+var systemInfoImplementors = []string{"SystemInfo"}
+
+func (ec *executionContext) _SystemInfo(ctx context.Context, sel ast.SelectionSet, obj *model.SystemInfo) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, systemInfoImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("SystemInfo")
+		case "database":
+			out.Values[i] = ec._SystemInfo_database(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "serverVersion":
+			out.Values[i] = ec._SystemInfo_serverVersion(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
 var userImplementors = []string{"User"}
 
 func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj *model.User) graphql.Marshaler {
@@ -8781,19 +9701,10 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 		case "signature":
 			out.Values[i] = ec._User_signature(ctx, field, obj)
 		case "position":
-			field := field
-			out.Concurrently(i, func() (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._User_position(ctx, field, obj)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			})
+			out.Values[i] = ec._User_position(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&invalids, 1)
+			}
 		case "role":
 			out.Values[i] = ec._User_role(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -8808,6 +9719,52 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 					}
 				}()
 				res = ec._User_hasPassword(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
+		case "phone":
+			out.Values[i] = ec._User_phone(ctx, field, obj)
+		case "iban":
+			out.Values[i] = ec._User_iban(ctx, field, obj)
+		case "costClaims":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._User_costClaims(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
+		case "purchaseInvoices":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._User_purchaseInvoices(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
+		case "salesInvoices":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._User_salesInvoices(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -9207,6 +10164,20 @@ func (ec *executionContext) unmarshalNCostClaimInput2githubᚗcomᚋtimojarvᚋf
 	return ec.unmarshalInputCostClaimInput(ctx, v)
 }
 
+func (ec *executionContext) marshalNCostClaimsConnection2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐCostClaimsConnection(ctx context.Context, sel ast.SelectionSet, v model.CostClaimsConnection) graphql.Marshaler {
+	return ec._CostClaimsConnection(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNCostClaimsConnection2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐCostClaimsConnection(ctx context.Context, sel ast.SelectionSet, v *model.CostClaimsConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._CostClaimsConnection(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNCostPool2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐCostPool(ctx context.Context, sel ast.SelectionSet, v model.CostPool) graphql.Marshaler {
 	return ec._CostPool(ctx, sel, &v)
 }
@@ -9260,6 +10231,20 @@ func (ec *executionContext) marshalNCostPool2ᚖgithubᚗcomᚋtimojarvᚋfindec
 
 func (ec *executionContext) unmarshalNCostPoolInput2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐCostPoolInput(ctx context.Context, v interface{}) (model.CostPoolInput, error) {
 	return ec.unmarshalInputCostPoolInput(ctx, v)
+}
+
+func (ec *executionContext) marshalNCostPoolsConnection2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐCostPoolsConnection(ctx context.Context, sel ast.SelectionSet, v model.CostPoolsConnection) graphql.Marshaler {
+	return ec._CostPoolsConnection(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNCostPoolsConnection2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐCostPoolsConnection(ctx context.Context, sel ast.SelectionSet, v *model.CostPoolsConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._CostPoolsConnection(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNDate2string(ctx context.Context, v interface{}) (string, error) {
@@ -9723,6 +10708,20 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 	return res
 }
 
+func (ec *executionContext) marshalNSystemInfo2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSystemInfo(ctx context.Context, sel ast.SelectionSet, v model.SystemInfo) graphql.Marshaler {
+	return ec._SystemInfo(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNSystemInfo2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSystemInfo(ctx context.Context, sel ast.SelectionSet, v *model.SystemInfo) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._SystemInfo(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNUser2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐUser(ctx context.Context, sel ast.SelectionSet, v model.User) graphql.Marshaler {
 	return ec._User(ctx, sel, &v)
 }
@@ -10171,6 +11170,18 @@ func (ec *executionContext) marshalOUser2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋ
 		return graphql.Null
 	}
 	return ec._User(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOViewOptions2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐViewOptions(ctx context.Context, v interface{}) (model.ViewOptions, error) {
+	return ec.unmarshalInputViewOptions(ctx, v)
+}
+
+func (ec *executionContext) unmarshalOViewOptions2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐViewOptions(ctx context.Context, v interface{}) (*model.ViewOptions, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalOViewOptions2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐViewOptions(ctx, v)
+	return &res, err
 }
 
 func (ec *executionContext) marshalO__EnumValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐEnumValueᚄ(ctx context.Context, sel ast.SelectionSet, v []introspection.EnumValue) graphql.Marshaler {

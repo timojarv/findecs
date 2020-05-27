@@ -5,8 +5,6 @@ import {
     Spinner,
     Heading,
     Divider,
-    Link,
-    Badge,
     Flex,
     useDisclosure,
     Modal,
@@ -14,7 +12,6 @@ import {
     ModalContent,
     ModalHeader,
     ModalBody,
-    useToast,
     Text,
     AlertDialog,
     AlertDialogOverlay,
@@ -27,19 +24,14 @@ import ErrorDisplay from "../../components/ErrorDisplay";
 import { useQuery, useMutation } from "urql";
 import { Link as RouterLink, useHistory } from "react-router-dom";
 import { DL, DT, DD } from "../../components/DescriptionList";
-import { formatCurrency, formatDate } from "../../util/format";
-import {
-    Table,
-    THead,
-    TBody,
-    TR,
-    TH,
-    TD,
-    TableContainer,
-} from "../../components/Table";
-import { statusColors, statuses } from "../../util/metadata";
+import { formatCurrency } from "../../util/format";
+import { TableContainer } from "../../components/Table";
 import CostPoolForm from "../../forms/CostPoolForm";
 import { Edit, Trash2 } from "react-feather";
+import PurchaseInvoiceList from "../../components/PurchaseInvoiceList";
+import SalesInvoiceList from "../../components/SalesInvoiceList";
+import CostClaimsList from "../../components/CostClaimsList";
+import { useMessage } from "../../util/message";
 
 const query = `
     query FetchCostPoolItems($id: ID!) {
@@ -60,13 +52,25 @@ const query = `
             }
             salesInvoices {
                 id
+                runningNumber
+                date
                 dueDate
                 total
+                recipient {
+                    id
+                    name
+                }
             }
             purchaseInvoices {
                 id
+                description
+                created
                 dueDate
                 total
+                sender {
+                    id
+                    name
+                }
             }
         }
     }
@@ -94,24 +98,15 @@ const CostPoolDelete = (props) => {
     const { isOpen, onOpen, onClose } = useDisclosure();
     const cancelRef = useRef();
     const [deletion, deleteCostPool] = useMutation(deleteMutation);
-    const toast = useToast();
+    const { infoMessage, errorMessage } = useMessage();
     const history = useHistory();
 
     const handleDelete = () => {
         deleteCostPool({ id }).then(({ error }) => {
             if (error) {
-                toast({
-                    status: "error",
-                    title: "Tapahtui virhe!",
-                    description: error.message,
-                    position: "top",
-                });
+                errorMessage(error.message);
             } else {
-                toast({
-                    status: "info",
-                    title: "Kustannuspaikka poistettu",
-                    position: "top",
-                });
+                infoMessage("Kustannuspaikka poistettu");
                 history.push("/costPools");
             }
         });
@@ -158,24 +153,15 @@ const CostPoolView = (props) => {
 
     const { isOpen, onOpen, onClose } = useDisclosure();
     const [update, updateCostPool] = useMutation(mutation);
-    const toast = useToast();
+    const { infoMessage, errorMessage } = useMessage();
 
     const onSubmit = (data) => {
         updateCostPool({ id: costPool.id, costPool: data }).then((res) => {
             if (!res.error) {
                 onClose();
-                toast({
-                    title: "Kustannuspaikka päivitetty",
-                    status: "success",
-                    position: "top",
-                });
+                infoMessage("Kustannuspaikka päivitetty");
             } else {
-                toast({
-                    title: "Jokin meni vikaan!",
-                    description: res.error.message,
-                    status: "error",
-                    position: "top",
-                });
+                errorMessage(res.error.message);
             }
         });
     };
@@ -183,7 +169,7 @@ const CostPoolView = (props) => {
     return (
         <React.Fragment>
             <Heading as="h2">{costPool.name}</Heading>
-            <Flex align="center" mb={6}>
+            <Flex align="center" my={4}>
                 <Text fontSize="xl" color="gray.600">
                     Kustannuspaikka
                 </Text>
@@ -227,100 +213,39 @@ const CostPoolView = (props) => {
 
             {costPool.costClaims.length > 0 ? (
                 <React.Fragment>
-                    <Divider my={6} />
+                    <Divider my={8} />
                     <Heading mb={6} as="h3" size="lg">
                         Liittyvät kulukorvaukset
                     </Heading>
                     <TableContainer>
-                        <Table>
-                            <THead>
-                                <TR>
-                                    <TH
-                                        display={["none", "table-cell"]}
-                                        textAlign="left"
-                                    >
-                                        Luotu
-                                    </TH>
-                                    <TH textAlign="left">Kuvaus</TH>
-                                    <TH
-                                        display={["none", "table-cell"]}
-                                        textAlign="left"
-                                    >
-                                        Tekijä
-                                    </TH>
-                                    <TH
-                                        display={["none", "table-cell"]}
-                                        textAlign="right"
-                                    >
-                                        Tila
-                                    </TH>
-                                    <TH textAlign="right">Summa</TH>
-                                </TR>
-                            </THead>
-                            <TBody>
-                                {costPool.costClaims.map((claim) => (
-                                    <TR key={claim.id}>
-                                        <TD display={["none", "table-cell"]}>
-                                            {formatDate(claim.created)}
-                                        </TD>
-                                        <TD py={4}>
-                                            <Link
-                                                as={RouterLink}
-                                                color="indigo.700"
-                                                to={`/costClaims/${claim.id}`}
-                                            >
-                                                {claim.description}
-                                            </Link>
-                                        </TD>
-                                        <TD display={["none", "table-cell"]}>
-                                            <Link
-                                                as={RouterLink}
-                                                color="indigo.700"
-                                                to="/users"
-                                            >
-                                                {claim.author.name}
-                                            </Link>
-                                        </TD>
-                                        <TD
-                                            display={["none", "table-cell"]}
-                                            textAlign="right"
-                                        >
-                                            <Badge
-                                                fontSize="0.8em"
-                                                mr={-1}
-                                                variantColor={
-                                                    statusColors[claim.status]
-                                                }
-                                            >
-                                                {statuses[claim.status]}
-                                            </Badge>
-                                        </TD>
-                                        <TD textAlign="right">
-                                            {formatCurrency(claim.total)}
-                                        </TD>
-                                    </TR>
-                                ))}
-                            </TBody>
-                        </Table>
+                        <CostClaimsList claims={costPool.costClaims} />
                     </TableContainer>
                 </React.Fragment>
             ) : null}
 
             {costPool.purchaseInvoices.length > 0 ? (
                 <React.Fragment>
-                    <Divider my={6} />
+                    <Divider my={8} />
                     <Heading my={4} as="h3" size="lg">
                         Liittyvät ostolaskut
                     </Heading>
+                    <TableContainer mt={8}>
+                        <PurchaseInvoiceList
+                            invoices={costPool.purchaseInvoices}
+                        />
+                    </TableContainer>
                 </React.Fragment>
             ) : null}
 
             {costPool.salesInvoices.length > 0 ? (
                 <React.Fragment>
-                    <Divider my={6} />
+                    <Divider my={8} />
                     <Heading my={4} as="h3" size="lg">
                         Liittyvät myyntilaskut
                     </Heading>
+                    <TableContainer mt={8}>
+                        <SalesInvoiceList invoices={costPool.salesInvoices} />
+                    </TableContainer>
                 </React.Fragment>
             ) : null}
 
@@ -328,6 +253,7 @@ const CostPoolView = (props) => {
                 isOpen={isOpen}
                 onClose={onClose}
                 closeOnOverlayClick={false}
+                preserveScrollBarGap={true}
             >
                 <ModalOverlay />
                 <ModalContent rounded="md">

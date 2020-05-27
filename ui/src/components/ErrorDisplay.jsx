@@ -1,19 +1,26 @@
-import React from 'react';
+import React from "react";
 import {
     Alert,
     AlertIcon,
     AlertTitle,
-    AlertDescription,
     Collapse,
     useDisclosure,
     Button,
     Code,
-} from '@chakra-ui/core';
+} from "@chakra-ui/core";
+
+const messages = {
+    "[GraphQL] sql: no rows in result set": "Sivua ei löydy",
+    "[Network] Failed to fetch": "Ei verkkoyhteyttä",
+};
 
 const ErrorDisplay = (props) => {
+    const { error } = props;
     const { isOpen, onToggle } = useDisclosure();
 
-    return props.error ? (
+    const message = error && messages[error.message];
+
+    return error ? (
         <Alert
             status="error"
             variant="subtle"
@@ -24,22 +31,31 @@ const ErrorDisplay = (props) => {
         >
             <AlertIcon size="2em" />
             <AlertTitle fontSize="lg" mt={4} mb={1}>
-                On tapahtunut virhe!
+                {message || "On tapahtunut virhe!"}
             </AlertTitle>
-            <Button variantColor="red" variant="link" my={2} onClick={onToggle}>
-                Lisätietoja
-            </Button>
-            <Collapse
-                textAlign="left"
-                as={Code}
-                fontSize="xs"
-                rounded="md"
-                p={2}
-                whiteSpace="pre-wrap"
-                isOpen={isOpen}
-            >
-                {JSON.stringify(props.error, null, 2)}
-            </Collapse>
+            {!message ? (
+                <React.Fragment>
+                    <Button
+                        variantColor="red"
+                        variant="link"
+                        my={2}
+                        onClick={onToggle}
+                    >
+                        Lisätietoja
+                    </Button>
+                    <Collapse
+                        textAlign="left"
+                        as={Code}
+                        fontSize="xs"
+                        rounded="md"
+                        p={2}
+                        whiteSpace="pre-wrap"
+                        isOpen={isOpen}
+                    >
+                        {JSON.stringify(props.error, null, 2)}
+                    </Collapse>
+                </React.Fragment>
+            ) : null}
         </Alert>
     ) : null;
 };

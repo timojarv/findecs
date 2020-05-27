@@ -9,3 +9,19 @@ export const formatCurrency = (amount) =>
         style: "currency",
         currency: "EUR",
     });
+
+export const referenceNumber = (base) => {
+    const coefficients = [7, 3, 1];
+    const checksum =
+        base
+            .toString()
+            .split("")
+            .reverse()
+            .reduce(
+                (sum, cur, i) =>
+                    sum + parseInt(cur) * coefficients[i % coefficients.length],
+                0
+            ) % 10;
+
+    return base.toString() + checksum.toString();
+};

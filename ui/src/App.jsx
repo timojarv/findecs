@@ -27,6 +27,15 @@ import Login from "./views/Login";
 import Version from "./components/Version";
 import CostPool from "./views/CostPool/CostPool";
 import { useQuery } from "urql";
+import PurchaseInvoice from "./views/PurchaseInvoice/PurchaseInvoice";
+import EditUser from "./views/User/EditUser";
+import SalesInvoice from "./views/SalesInvoice/SalesInvoice";
+import PrintSalesInvoice from "./views/SalesInvoice/PrintSalesInvoice";
+import Settings from "./views/Settings";
+import User from "./views/User/User";
+import ResetPassword from "./views/ResetPassword";
+import EditPurchaseInvoice from "./views/PurchaseInvoice/EditPurchaseInvoice";
+import EditSalesInvoice from "./views/SalesInvoice/EditSalesInvoice";
 
 const query = `
     query UserQuery {
@@ -34,23 +43,41 @@ const query = `
             id
             name
         }
+        systemInfo {
+            serverVersion
+            database
+        }
     }
 `;
 
 const App = (props) => {
-    const [user, setUser] = useState();
+    const { user, setUser } = props;
     const [result] = useQuery({ query });
 
     const { fetching, data } = result;
 
     useEffect(() => {
-        if (data) setUser(data.user);
+        if (data && !user) setUser(data.user);
     }, [data]);
 
     if (fetching) return null;
 
     if (!fetching && !user) {
-        return <Login setUser={setUser} />;
+        return (
+            <Router>
+                <Switch>
+                    <Route
+                        path="/resetPassword"
+                        component={ResetPassword}
+                    ></Route>
+                    <Route
+                        render={(props) => (
+                            <Login setUser={setUser} {...props} />
+                        )}
+                    ></Route>
+                </Switch>
+            </Router>
+        );
     }
 
     return (
@@ -69,10 +96,14 @@ const App = (props) => {
 
             <Route
                 render={(props) => (
-                    <Navigation setUser={setUser} user={user} {...props} />
+                    <Navigation
+                        setUser={setUser}
+                        user={(data && data.user) || user}
+                        {...props}
+                    />
                 )}
             />
-            <Box margin="auto" maxWidth="1200px" px={[4, 16]} pt={4} pb={12}>
+            <Box margin="auto" maxWidth="1200px" px={[6, 16]} pt={4} pb={12}>
                 <Switch>
                     <Route
                         path="/costClaims/new"
@@ -94,6 +125,14 @@ const App = (props) => {
                         component={NewPurchaseInvoice}
                     ></Route>
                     <Route
+                        path="/purchaseInvoices/:id/edit"
+                        component={EditPurchaseInvoice}
+                    ></Route>
+                    <Route
+                        path="/purchaseInvoices/:id"
+                        component={PurchaseInvoice}
+                    ></Route>
+                    <Route
                         path="/purchaseInvoices"
                         component={PurchaseInvoices}
                     ></Route>
@@ -103,12 +142,25 @@ const App = (props) => {
                         component={NewSalesInvoice}
                     ></Route>
                     <Route
+                        path="/salesInvoices/:id/print"
+                        component={PrintSalesInvoice}
+                    ></Route>
+                    <Route
+                        path="/salesInvoices/:id/edit"
+                        component={EditSalesInvoice}
+                    ></Route>
+                    <Route
+                        path="/salesInvoices/:id"
+                        component={SalesInvoice}
+                    ></Route>
+                    <Route
                         path="/salesInvoices"
                         component={SalesInvoices}
                     ></Route>
 
                     <Route path="/users/new" component={NewUser}></Route>
-                    <Route path="/users/:id"></Route>
+                    <Route path="/users/:id/edit" component={EditUser}></Route>
+                    <Route path="/users/:id" component={User}></Route>
                     <Route path="/users" component={Users}></Route>
 
                     <Route path="/costPools/:id" component={CostPool}></Route>
@@ -117,17 +169,12 @@ const App = (props) => {
                     <Route path="/contacts/:id" component={Contact}></Route>
                     <Route path="/contacts" component={Contacts}></Route>
 
-                    <Route
-                        path="/login"
-                        render={(props) => (
-                            <Login user={user} setUser={setUser} {...props} />
-                        )}
-                    ></Route>
+                    <Route path="/settings" component={Settings}></Route>
                     <Route path="/import" component={Import}></Route>
                     <Redirect to="/costClaims" />
                 </Switch>
             </Box>
-            <Version />
+            <Version info={data && data.systemInfo} />
         </Router>
     );
 };

@@ -23,9 +23,9 @@ CREATE TABLE cost_claims (
     created DATETIME DEFAULT CURRENT_TIMESTAMP,
     modified DATETIME ON UPDATE CURRENT_TIMESTAMP,
     year INT DEFAULT YEAR(CURRENT_TIMESTAMP),
-    accepted_by VARCHAR(64),
+    approved_by VARCHAR(64),
     FOREIGN KEY (author) REFERENCES users (id),
-    FOREIGN KEY (accepted_by) REFERENCES users (id),
+    FOREIGN KEY (approved_by) REFERENCES users (id),
     FOREIGN KEY (cost_pool) REFERENCES cost_pools (id)
 );
 

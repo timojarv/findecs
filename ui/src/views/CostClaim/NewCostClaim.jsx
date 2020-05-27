@@ -1,8 +1,9 @@
-import React, { useContext } from "react";
-import { Box, Heading, Button, useToast } from "@chakra-ui/core";
+import React from "react";
+import { Box, Heading, Button } from "@chakra-ui/core";
 import CostClaimForm from "../../forms/CostClaimForm";
 import { Link } from "react-router-dom";
 import { useMutation } from "urql";
+import { useMessage } from "../../util/message";
 
 const mutation = `
     mutation CreateCostClaim($costClaim: CostClaimInput!, $receipts: [ReceiptInput!]!) {
@@ -19,7 +20,7 @@ const mutation = `
             created
             modified
             status
-            acceptedBy {
+            approvedBy {
                 id
                 name
                 email
@@ -41,7 +42,7 @@ const mutation = `
 
 const NewCostClaim = (props) => {
     const [creation, createCostClaim] = useMutation(mutation);
-    const toast = useToast();
+    const { successMessage, errorMessage } = useMessage();
 
     const handleSubmit = (data) => {
         createCostClaim({
@@ -54,19 +55,10 @@ const NewCostClaim = (props) => {
             receipts: data.receipts,
         }).then(({ error, data }) => {
             if (!error) {
-                toast({
-                    status: "success",
-                    title: "Kulukorvaus luotu",
-                    position: "top",
-                });
+                successMessage("Kulukorvaus luotu");
                 props.history.push(`/costClaims/${data.createCostClaim.id}`);
             } else {
-                toast({
-                    status: "error",
-                    title: "Jotain meni vikaan!",
-                    description: error.message,
-                    position: "top",
-                });
+                errorMessage(error.message);
             }
         });
     };

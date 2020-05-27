@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"flag"
 	"net/http"
 	"os"
 	"strings"
@@ -13,6 +15,7 @@ import (
 	"github.com/teris-io/shortid"
 	"github.com/timojarv/findecs/graph"
 	"github.com/timojarv/findecs/graph/generated"
+	"github.com/timojarv/findecs/graph/model"
 	"github.com/timojarv/findecs/session"
 	"github.com/timojarv/findecs/storage"
 	"github.com/timojarv/findecs/store"
@@ -26,29 +29,65 @@ func main() {
 		port = defaultPort
 	}
 
+	debug := flag.Bool("debug", false, "Set debug logging")
+	bootstrap := flag.Bool("bootstrap", false, "Create initial user")
+	usePlayground := flag.Bool("playground", true, "Enable GraphQL playground")
+	useUI := flag.Bool("ui", false, "Enable UI server")
+	flag.Parse()
+	if *debug {
+		log.SetLevel(log.DebugLevel)
+	}
+
 	log.Info("💸 Findecs 💸")
 
 	router := chi.NewRouter()
 
 	router.Use(cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:1234"},
+		AllowedOrigins:   []string{"http://localhost:1234", "http://192.168.10.51:1234"},
 		AllowCredentials: true,
 	}).Handler)
 
 	router.Use(session.Middleware(store.DB.DB))
 
-	srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &graph.Resolver{
-		DB:      store.DB,
-		ShortID: shortid.MustNew(1, shortid.DefaultABC, 326691),
-	}}))
+	resolver := graph.Resolver{
+		DB:            store.DB,
+		ShortID:       shortid.MustNew(1, shortid.DefaultABC, 326691),
+		ServerVersion: "findecs-v0.1.0",
+	}
+	srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &resolver}))
 
-	router.Handle("/", playground.Handler("GraphQL playground", "/query"))
+	// Bootstrapping
+	if *bootstrap {
+		pw := "admin"
+		_, err := resolver.MakeUser(context.Background(), model.UserInput{
+			Name:     "Admin",
+			Email:    "admin@email.com",
+			Role:     "root",
+			Password: &pw,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Info("Initial user created.")
+	}
+
+	if *usePlayground {
+		router.Handle("/playground", playground.Handler("GraphQL playground", "/query"))
+		log.Infof("Connect to http://localhost:%s/playground for GraphQL playground.", port)
+	} else {
+		log.Info("Playground is disabled.")
+	}
 	router.Handle("/query", srv)
 
 	// Uploaded files
 	FileServer(router, "/upload", http.Dir(storage.UPLOAD_DIR))
 
-	log.Printf("connect to http://localhost:%s/ for GraphQL playground", port)
+	// User interface
+	if *useUI {
+		FileServer(router, "/", http.Dir("ui"))
+		log.Info("Serving UI on root route.")
+	}
+
 	log.Fatal(http.ListenAndServe(":"+port, router))
 }
 

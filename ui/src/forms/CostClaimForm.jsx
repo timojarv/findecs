@@ -31,8 +31,10 @@ import { APIHost } from "../util/api";
 const query = `
     query FetchCostPools {
         costPools(limit: null) {
-            id
-            name
+            nodes {
+                id
+                name
+            }
         }
     }
 `;
@@ -67,6 +69,7 @@ const CostClaimForm = (props) => {
         clearError,
         reset,
         control,
+        watch,
     } = useForm({ validationSchema: schema });
 
     const { fields, append, remove } = useFieldArray({
@@ -84,7 +87,7 @@ const CostClaimForm = (props) => {
         });
     }, [data, reset, append]);
 
-    const costPools = result.data ? result.data.costPools : [];
+    const costPools = result.data ? result.data.costPools.nodes : [];
 
     const handleAddFiles = (files) => {
         files.forEach((file) => {
@@ -162,9 +165,24 @@ const CostClaimForm = (props) => {
                             ref={register({ required: true })}
                         >
                             {label}
+                            {key === "otherAccount" ? ":" : ""}
                         </Radio>
                     ))}
                 </RadioGroup>
+                <Input
+                    mt={1}
+                    isDisabled={watch("sourceOfMoney") !== "otherAccount"}
+                    name="otherIban"
+                    ref={register}
+                />
+                <FormHelperText
+                    opacity={
+                        watch("sourceOfMoney") !== "otherAccount" ? 0.5 : 1
+                    }
+                    transition="opacity 0.1s"
+                >
+                    Syötä muun tilin tilinumero.
+                </FormHelperText>
             </FormControl>
             <FormControl isDisabled={isLoading}>
                 <FormLabel>Lisätietoja</FormLabel>

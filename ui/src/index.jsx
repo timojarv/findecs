@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import ReactDOM from "react-dom";
 import { ThemeProvider, CSSReset } from "@chakra-ui/core";
 
@@ -10,33 +10,73 @@ import { enableMapSet } from "immer";
 import { createClient, dedupExchange, Provider } from "urql";
 import { cacheExchange } from "@urql/exchange-graphcache";
 import { multipartFetchExchange } from "@urql/exchange-multipart-fetch";
+import { pipe, tap } from "wonka";
+import { useMessage } from "./util/message";
 
 enableMapSet();
+const contactsQuery = `
+    query {
+        contacts {
+            nodes {
+                id
+            }
+        }
+    }
+`;
 
-const client = createClient({
-    url: `${APIHost}/query`,
-    exchanges: [
-        dedupExchange,
-        cacheExchange({
-            schema,
-            keys: {
-                User: ({ id }) => id || null,
-            },
-        }),
-        multipartFetchExchange,
-    ],
-    requestPolicy: "cache-and-network",
-    fetchOptions: {
-        credentials: "include",
-    },
-});
+const GraphQLApp = () => {
+    const [user, setUser] = useState();
+    const { infoMessage } = useMessage();
+
+    const logoutExchange = ({ forward }) => (ops$) =>
+        pipe(
+            ops$,
+            forward,
+            tap(({ error }) => {
+                if (error && error.message.includes("not authenticated")) {
+                    if (user) {
+                        infoMessage("Ole hyvä ja kirjaudu sisään udelleen");
+                    }
+                    setUser(null);
+                }
+            })
+        );
+
+    const client = useMemo(
+        () =>
+            createClient({
+                url: `${APIHost}/query`,
+                exchanges: [
+                    dedupExchange,
+                    logoutExchange,
+                    cacheExchange({
+                        schema,
+                        keys: {
+                            User: ({ id }) => id || null,
+                            SystemInfo: () => null,
+                        },
+                    }),
+                    multipartFetchExchange,
+                ],
+                requestPolicy: "cache-and-network",
+                fetchOptions: {
+                    credentials: "include",
+                },
+            }),
+        [user]
+    );
+
+    return (
+        <Provider value={client}>
+            <App user={user} setUser={setUser} />
+        </Provider>
+    );
+};
 
 ReactDOM.render(
     <ThemeProvider theme={theme}>
         <CSSReset />
-        <Provider value={client}>
-            <App />
-        </Provider>
+        <GraphQLApp />
     </ThemeProvider>,
     document.querySelector("#root")
 );

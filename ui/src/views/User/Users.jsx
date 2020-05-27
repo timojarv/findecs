@@ -10,6 +10,7 @@ import {
     Button,
     Flex,
     IconButton,
+    Link,
 } from "@chakra-ui/core";
 import { useQuery } from "urql";
 import ErrorDisplay from "../../components/ErrorDisplay";
@@ -58,7 +59,9 @@ const UserCard = ({
     >
         <Box flexGrow={1}>
             <Text as="div" fontWeight="bold">
-                {name}
+                <Link as={RouterLink} to={`/users/${id}`}>
+                    {name}
+                </Link>
                 {role !== "basic" ? (
                     <Badge variantColor={roles[role].color} ml={2}>
                         {roles[role].label}
@@ -71,7 +74,13 @@ const UserCard = ({
                 <Problem when={!hasPassword}>Ei salasanaa</Problem>
             </Text>
         </Box>
-        <IconButton icon="edit" variant="ghost" variantColor="indigo" />
+        <IconButton
+            as={RouterLink}
+            to={`/users/${id}/edit`}
+            icon="edit"
+            variant="ghost"
+            variantColor="indigo"
+        />
     </Flex>
 );
 

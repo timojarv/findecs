@@ -9,7 +9,6 @@ import {
     ModalContent,
     ModalHeader,
     ModalBody,
-    useToast,
     Link,
 } from "@chakra-ui/core";
 import { useQuery, useMutation } from "urql";
@@ -27,18 +26,22 @@ import { Link as RouterLink } from "react-router-dom";
 import { formatCurrency } from "../../util/format";
 import CostPoolForm from "../../forms/CostPoolForm";
 import Pagination from "../../components/Pagination";
+import Empty from "../../components/Empty";
+import { useMessage } from "../../util/message";
 
 const limit = 20;
 
 const query = `
     query FetchCostPools($offset: Int! = 0) {
         costPools(offset: $offset, limit: ${limit}) {
-            id
-            name
-            budget
-            total
+            nodes {
+                id
+                name
+                budget
+                total
+            }
+            totalCount
         }
-        costPoolCount
     }
 `;
 
@@ -53,7 +56,10 @@ const mutation = `
     }
 `;
 
-const CostPoolsTable = (props) => {
+const CostPools = (props) => {
+    const [creation, createCostPool] = useMutation(mutation);
+    const { successMessage, errorMessage } = useMessage();
+    const { isOpen, onOpen, onClose } = useDisclosure();
     const [offset, setOffset] = useState(0);
     const [result] = useQuery({
         query,
@@ -62,88 +68,16 @@ const CostPoolsTable = (props) => {
 
     const { fetching, error, data } = result;
 
-    const pools = data ? data.costPools : [];
-
-    return (
-        <TableContainer>
-            <Table>
-                <THead>
-                    <TR>
-                        <TH textAlign="left">Nimi</TH>
-                        <TH textAlign="right">Budjetti</TH>
-                        <TH display={["none", "table-cell"]} textAlign="right">
-                            Käytetty
-                        </TH>
-                        <TH display={["none", "table-cell"]} textAlign="right">
-                            Jäljellä
-                        </TH>
-                    </TR>
-                </THead>
-                <TBody>
-                    {(pools || []).map((pool) => (
-                        <TR key={pool.id}>
-                            <TD py={2}>
-                                <Link
-                                    as={RouterLink}
-                                    to={`/costPools/${pool.id}`}
-                                    color="indigo.700"
-                                >
-                                    {pool.name}
-                                </Link>
-                            </TD>
-                            <TD textAlign="right">
-                                {formatCurrency(pool.budget)}
-                            </TD>
-                            <TD
-                                display={["none", "table-cell"]}
-                                textAlign="right"
-                            >
-                                {formatCurrency(pool.total)}
-                            </TD>
-                            <TD
-                                display={["none", "table-cell"]}
-                                textAlign="right"
-                            >
-                                {formatCurrency(pool.budget - pool.total)}
-                            </TD>
-                        </TR>
-                    ))}
-                </TBody>
-            </Table>
-            <Pagination
-                isLoading={fetching}
-                onChange={setOffset}
-                total={data && data.costPoolCount}
-                limit={limit}
-                offset={offset}
-            />
-            <ErrorDisplay error={error} />
-        </TableContainer>
-    );
-};
-
-const CostPools = (props) => {
-    const [creation, createCostPool] = useMutation(mutation);
-    const toast = useToast();
-    const { isOpen, onOpen, onClose } = useDisclosure();
+    const pools = data ? data.costPools.nodes : [];
 
     const onSubmit = (data) => {
         createCostPool({ costPool: data }).then((res) => {
             if (!res.error) {
                 onClose();
-                refetch();
-                toast({
-                    title: "Kustannuspaikka luotu",
-                    status: "success",
-                    position: "top",
-                });
+                successMessage("Kustannuspaikka luotu");
+                props.history.push(`/costPools/${res.data.createCostPool.id}`);
             } else {
-                toast({
-                    title: "Jokin meni vikaan!",
-                    description: res.error.message,
-                    status: "error",
-                    position: "top",
-                });
+                errorMessage(res.error.message);
             }
         });
     };
@@ -159,11 +93,72 @@ const CostPools = (props) => {
             >
                 Luo uusi
             </Button>
-            <CostPoolsTable />
+            <ErrorDisplay error={error} />
+            <TableContainer>
+                <Table>
+                    <THead>
+                        <TR>
+                            <TH textAlign="left">Nimi</TH>
+                            <TH textAlign="right">Budjetti</TH>
+                            <TH
+                                display={["none", "table-cell"]}
+                                textAlign="right"
+                            >
+                                Käytetty
+                            </TH>
+                            <TH
+                                display={["none", "table-cell"]}
+                                textAlign="right"
+                            >
+                                Jäljellä
+                            </TH>
+                        </TR>
+                    </THead>
+                    <TBody>
+                        {(pools || []).map((pool) => (
+                            <TR key={pool.id}>
+                                <TD py={2}>
+                                    <Link
+                                        as={RouterLink}
+                                        to={`/costPools/${pool.id}`}
+                                        color="indigo.700"
+                                    >
+                                        {pool.name}
+                                    </Link>
+                                </TD>
+                                <TD textAlign="right">
+                                    {formatCurrency(pool.budget)}
+                                </TD>
+                                <TD
+                                    display={["none", "table-cell"]}
+                                    textAlign="right"
+                                >
+                                    {formatCurrency(pool.total)}
+                                </TD>
+                                <TD
+                                    display={["none", "table-cell"]}
+                                    textAlign="right"
+                                >
+                                    {formatCurrency(pool.budget - pool.total)}
+                                </TD>
+                            </TR>
+                        ))}
+                    </TBody>
+                </Table>
+                <Empty visible={!pools.length} />
+                <Pagination
+                    isLoading={fetching}
+                    onChange={setOffset}
+                    total={data && data.costPools.totalCount}
+                    limit={limit}
+                    offset={offset}
+                />
+            </TableContainer>
             <Modal
                 isOpen={isOpen}
                 onClose={onClose}
                 closeOnOverlayClick={false}
+                preserveScrollBarGap={true}
             >
                 <ModalOverlay />
                 <ModalContent rounded="md">

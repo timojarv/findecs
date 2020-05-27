@@ -64,7 +64,7 @@ type CostClaim struct {
 	Status      Status
 	Comment     string
 	Details     string
-	AcceptedBy  string
+	ApprovedBy  string
 	CostPool    CostPool
 	MoneySource MoneySource
 	Receipts    Receipts

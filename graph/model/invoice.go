@@ -1,27 +1,32 @@
 package model
 
 type PurchaseInvoice struct {
-	ID          string  `json:"id"`
-	SenderID    string  `json:"sender" db:"sender"`
-	Description string  `json:"description"`
-	DueDate     string  `json:"dueDate" db:"due_date"`
-	Status      Status  `json:"status"`
-	Created     string  `json:"created"`
-	Modified    *string `json:"modified"`
-	Details     *string `json:"details"`
-	Note        *string `json:"note"`
+	ID           string  `json:"id"`
+	AuthorID     string  `db:"author"`
+	SenderID     string  `json:"sender" db:"sender"`
+	Description  string  `json:"description"`
+	DueDate      string  `json:"dueDate" db:"due_date"`
+	Status       Status  `json:"status"`
+	ApprovedByID *string `db:"approved_by"`
+	Created      string  `json:"created"`
+	Modified     *string `json:"modified"`
+	Details      *string `json:"details"`
+	Note         *string `json:"note"`
 }
 
 type SalesInvoice struct {
-	ID             string  `json:"id"`
-	RunningNumber  int     `json:"runningNumber" db:"running_number"`
-	RecipientID    string  `json:"recipient" db:"recipient"`
-	Date           string  `json:"date"`
-	DueDate        string  `json:"dueDate" db:"due_date"`
-	Status         Status  `json:"status"`
-	Details        *string `json:"details"`
-	PayerReference *string `json:"payerReference" db:"payer_reference"`
-	ContactPerson  *string `json:"contactPerson" db:"contact_person"`
+	ID                  string  `json:"id"`
+	AuthorID            string  `db:"author"`
+	RunningNumberSuffix int     `db:"running_number"`
+	RecipientID         string  `json:"recipient" db:"recipient"`
+	Date                string  `json:"date"`
+	DueDate             string  `json:"dueDate" db:"due_date"`
+	Status              Status  `json:"status"`
+	Created             string  `json:"created"`
+	Modified            *string `json:"modified"`
+	Details             *string `json:"details"`
+	PayerReference      *string `json:"payerReference" db:"payer_reference"`
+	ContactPerson       *string `json:"contactPerson" db:"contact_person"`
 }
 
 type InvoiceRow struct {

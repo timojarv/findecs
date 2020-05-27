@@ -10,7 +10,7 @@ import {
 import { useForm } from "react-hook-form";
 
 const ContactForm = (props) => {
-    const { onSubmit, onClose, data } = props;
+    const { onSubmit, onClose, data, isSubmitting } = props;
     const { register, handleSubmit } = useForm({ defaultValues: data });
 
     return (
@@ -31,7 +31,11 @@ const ContactForm = (props) => {
                 <Button onClick={onClose} type="button">
                     Peruuta
                 </Button>
-                <Button variantColor="indigo" type="submit">
+                <Button
+                    isLoading={isSubmitting}
+                    variantColor="indigo"
+                    type="submit"
+                >
                     {data ? "Tallenna" : "Luo yhteystieto"}
                 </Button>
             </Flex>

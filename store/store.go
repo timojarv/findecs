@@ -21,7 +21,15 @@ var DB *sqlx.DB
 
 func init() {
 	var err error
-	dsn := fmt.Sprintf("findecs:%s@/findecs?multiStatements=true&interpolateParams=true", os.Getenv("MYSQL_PASSWORD"))
+	dbHost := os.Getenv("MYSQL_HOST")
+	if dbHost == "" {
+		dbHost = "127.0.0.1"
+	}
+	dbPort := os.Getenv("MYSQL_PORT")
+	if dbPort == "" {
+		dbPort = "3306"
+	}
+	dsn := fmt.Sprintf("findecs:%s@tcp(%s:%s)/findecs?multiStatements=true&interpolateParams=true", os.Getenv("MYSQL_PASSWORD"), dbHost, dbPort)
 	DB, err = sqlx.Connect("mysql", dsn)
 	if err != nil {
 		logrus.Fatal(err)

@@ -18,8 +18,10 @@ import { formatCurrency } from "../util/format";
 const query = `
     query FetchCostPools {
         costPools(limit: null) {
-            id
-            name
+            nodes {
+                id
+                name
+            }
         }
     }
 `;
@@ -37,7 +39,7 @@ const InvoiceRowInput = (props) => {
 
     useEffect(() => append(), [append]);
 
-    const costPools = result.data ? result.data.costPools : [];
+    const costPools = result.data ? result.data.costPools.nodes : [];
 
     const rows = watch("rows", []);
 
@@ -63,6 +65,7 @@ const InvoiceRowInput = (props) => {
                             <Input
                                 name={`rows[${index}].description`}
                                 ref={register({ required: true })}
+                                defaultValue={field.description}
                             />
                         </FormControl>
                         <FormControl as="td" pb={4} isRequired>
@@ -74,6 +77,7 @@ const InvoiceRowInput = (props) => {
                                     ref={register({ required: true })}
                                     borderBottomRightRadius={0}
                                     borderTopRightRadius={0}
+                                    defaultValue={field.amount}
                                 />
                                 <InputRightAddon>€</InputRightAddon>
                             </InputGroup>
@@ -85,6 +89,7 @@ const InvoiceRowInput = (props) => {
                                     placeholder="Valitse kustannuspaikka"
                                     ref={register({ required: true })}
                                     mr={4}
+                                    defaultValue={field.costPool}
                                 >
                                     {costPools.map(({ name, id }) => (
                                         <option key={id} value={id}>
@@ -98,6 +103,13 @@ const InvoiceRowInput = (props) => {
                                     onClick={() => remove(index)}
                                 />
                             </Flex>
+                        </FormControl>
+                        <FormControl as="td" display="none">
+                            <Input
+                                ref={register()}
+                                defaultValue={field.id}
+                                name={`rows[${index}].id`}
+                            />
                         </FormControl>
                     </tr>
                 ))}

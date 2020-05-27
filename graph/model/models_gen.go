@@ -20,12 +20,9 @@ type ContactsConnection struct {
 	TotalCount int        `json:"totalCount"`
 }
 
-type CostClaimInput struct {
-	Description   string        `json:"description"`
-	Author        string        `json:"author"`
-	CostPool      string        `json:"costPool"`
-	Details       *string       `json:"details"`
-	SourceOfMoney SourceOfMoney `json:"sourceOfMoney"`
+type CostClaimsConnection struct {
+	Nodes      []*CostClaim `json:"nodes"`
+	TotalCount int          `json:"totalCount"`
 }
 
 type CostPoolInput struct {
@@ -33,7 +30,13 @@ type CostPoolInput struct {
 	Budget float64 `json:"budget"`
 }
 
+type CostPoolsConnection struct {
+	Nodes      []*CostPool `json:"nodes"`
+	TotalCount int         `json:"totalCount"`
+}
+
 type InvoiceRowInput struct {
+	ID          *string `json:"id"`
 	CostPool    string  `json:"costPool"`
 	Description string  `json:"description"`
 	Amount      float64 `json:"amount"`
@@ -85,6 +88,13 @@ type SettingsInput struct {
 	Position    string          `json:"position"`
 	Signature   *graphql.Upload `json:"signature"`
 	NewPassword *string         `json:"newPassword"`
+	Phone       string          `json:"phone"`
+	Iban        string          `json:"iban"`
+}
+
+type SystemInfo struct {
+	Database      string `json:"database"`
+	ServerVersion string `json:"serverVersion"`
 }
 
 type UserInput struct {
@@ -92,6 +102,11 @@ type UserInput struct {
 	Email    string   `json:"email"`
 	Role     UserRole `json:"role"`
 	Password *string  `json:"password"`
+}
+
+type ViewOptions struct {
+	Author string `json:"author"`
+	Status string `json:"status"`
 }
 
 type SourceOfMoney string

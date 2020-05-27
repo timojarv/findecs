@@ -9,7 +9,6 @@ import {
     ModalContent,
     ModalBody,
     ModalOverlay,
-    useToast,
     Flex,
     Input,
     Link,
@@ -30,6 +29,8 @@ import {
 import Pagination from "../../components/Pagination";
 import { Link as RouterLink } from "react-router-dom";
 import { useForm } from "react-hook-form";
+import Empty from "../../components/Empty";
+import NewContact from "./NewContact";
 
 const limit = 20;
 
@@ -46,42 +47,23 @@ const query = `
     }
 `;
 
-const createMutation = `
-    mutation CreateContact($contact: ContactInput!) {
-        createContact(contact: $contact) {
-            id
-            name
-            address
-        }
-    }
-`;
-
 const Contacts = (props) => {
     const [offset, setOffset] = useState(0);
     const [searchTerm, setSearchTerm] = useState();
-    const [result, refetch] = useQuery({
+    const [result] = useQuery({
         query,
         variables: { offset, searchTerm },
     });
     const { register, handleSubmit } = useForm();
-    const [creation, createContact] = useMutation(createMutation);
     const { isOpen, onOpen, onClose } = useDisclosure();
-    const toast = useToast();
-
-    const handleCreate = (data) => {
-        createContact({ contact: data }).then(() => {
-            toast({
-                status: "success",
-                title: "Yhteystieto luotu",
-                position: "top",
-            });
-            refetch();
-            onClose();
-        });
-    };
 
     const { fetching, error, data } = result;
     const contacts = data ? data.contacts.nodes : [];
+
+    const handleCreated = (contact) => {
+        onClose();
+        props.history.push(`/contacts/${contact.id}`);
+    };
 
     return (
         <Box maxWidth="800px" margin="auto" pt={8}>
@@ -142,6 +124,8 @@ const Contacts = (props) => {
                         ))}
                     </TBody>
                 </Table>
+                <Empty visible={!contacts.length} />
+
                 <Pagination
                     total={data && data.contacts.totalCount}
                     limit={limit}
@@ -150,24 +134,11 @@ const Contacts = (props) => {
                     isLoading={fetching}
                 />
             </TableContainer>
-            <Modal
-                isOpen={isOpen}
-                closeOnOverlayClick={false}
+            <NewContact
+                onCreate={handleCreated}
                 onClose={onClose}
-            >
-                <ModalOverlay />
-                <ModalContent rounded="md">
-                    <ModalHeader>Uusi yhteystieto</ModalHeader>
-                    <ModalBody>
-                        <ContactForm
-                            error={creation.error}
-                            isSubmitting={creation.fetching}
-                            onClose={onClose}
-                            onSubmit={handleCreate}
-                        />
-                    </ModalBody>
-                </ModalContent>
-            </Modal>
+                isOpen={isOpen}
+            />
         </Box>
     );
 };

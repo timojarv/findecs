@@ -20,15 +20,16 @@ import {
     AlertDialogHeader,
     AlertDialogBody,
     AlertDialogFooter,
-    useToast,
 } from "@chakra-ui/core";
-import { Printer, Edit, Trash2 } from "react-feather";
+import { Printer, Edit, Trash2, MessageSquare } from "react-feather";
 import { DL, DT, DD } from "../../components/DescriptionList";
 import { statuses, statusColors, sourcesOfMoney } from "../../util/metadata";
 import { formatDateTime, formatCurrency, formatDate } from "../../util/format";
 import { APIHost } from "../../util/api";
 import { useQuery, useMutation } from "urql";
 import ErrorDisplay from "../../components/ErrorDisplay";
+import { useMessage } from "../../util/message";
+import StatusBadge from "../../components/StatusBadge";
 
 const query = `
     query FetchCostClaim ($id: ID!) {
@@ -39,18 +40,17 @@ const query = `
             author {
                 id
                 name
-                email
             }
             details
             created
             modified
             status
-            acceptedBy {
+            approvedBy {
                 id
                 name
-                email
             }
             sourceOfMoney
+            otherIban
             costPool {
                 id
                 name
@@ -78,24 +78,15 @@ const CostClaimDelete = (props) => {
     const { isOpen, onOpen, onClose } = useDisclosure();
     const cancelRef = useRef();
     const [deletion, deleteCostClaim] = useMutation(deleteMutation);
-    const toast = useToast();
+    const { infoMessage, errorMessage } = useMessage();
     const history = useHistory();
 
     const handleDelete = () => {
         deleteCostClaim({ id }).then(({ error }) => {
             if (error) {
-                toast({
-                    status: "error",
-                    title: "Tapahtui virhe!",
-                    description: error.message,
-                    position: "top",
-                });
+                errorMessage(error.message);
             } else {
-                toast({
-                    status: "info",
-                    title: "Kulukorvaus poistettu",
-                    position: "top",
-                });
+                infoMessage("Kulukorvaus poistettu");
                 history.push("/costClaims");
             }
         });
@@ -143,62 +134,47 @@ const renderClaim = (claim) =>
                     {claim.description}
                 </Heading>
             </Flex>
-            <Flex align="center" my={4}>
+            <Flex align="center" mt={2} mb={6}>
                 <Text fontSize="lg" color="gray.600">
                     {claim.runningNumber} / 2020
                 </Text>
-                <Text color="gray.500" mx={3}>
+                <Text color="gray.400" mx={3}>
                     &bull;
                 </Text>
-                <Badge
-                    rounded="md"
-                    py={1}
-                    px={2}
-                    variantColor={statusColors[claim.status]}
-                >
-                    {statuses[claim.status]}
-                </Badge>
+                <StatusBadge status={claim.status} />
                 <Box flexGrow={1} />
+                <Button variantColor="indigo" variant="ghost">
+                    <MessageSquare size="1.2em" />
+                </Button>
                 <Button
                     flexShrink={0}
-                    variant="outline"
+                    variant="ghost"
                     variantColor="indigo"
-                    size="sm"
                     as={RouterLink}
                     target="_blank"
                     to={`/costClaims/${claim.id}/print`}
+                    ml={4}
                 >
-                    <Text display={["none", "inline-block"]} mr={2}>
-                        Tulosta
-                    </Text>
-                    <Printer size="1em" />
+                    <Printer size="1.2em" />
                 </Button>
                 <Button
                     flexShrink={0}
                     ml={4}
-                    variant="outline"
+                    variant="ghost"
                     variantColor="indigo"
-                    size="sm"
                     as={RouterLink}
                     to={`/costClaims/${claim.id}/edit`}
                 >
-                    <Text display={["none", "inline-block"]} mr={2}>
-                        Muokkaa
-                    </Text>
-                    <Edit size="1em" />
+                    <Edit size="1.2em" />
                 </Button>
                 <CostClaimDelete id={claim.id}>
                     <Button
                         flexShrink={0}
                         ml={4}
-                        variant="outline"
+                        variant="ghost"
                         variantColor="red"
-                        size="sm"
                     >
-                        <Text display={["none", "inline-block"]} mr={2}>
-                            Poista
-                        </Text>
-                        <Trash2 size="1em" />
+                        <Trash2 size="1.2em" />
                     </Button>
                 </CostClaimDelete>
             </Flex>
@@ -207,10 +183,28 @@ const renderClaim = (claim) =>
                 <DD>{formatCurrency(claim.total)}</DD>
                 <DT>Tekijä</DT>
                 <DD>
-                    <Link color="indigo.700">
-                        {claim.author.name} &lt;{claim.author.email}&gt;
+                    <Link
+                        as={RouterLink}
+                        to={`/users/${claim.author.id}`}
+                        color="indigo.700"
+                    >
+                        {claim.author.name}
                     </Link>
                 </DD>
+                {claim.approvedBy ? (
+                    <React.Fragment>
+                        <DT>Hyväksyjä</DT>
+                        <DD>
+                            <Link
+                                as={RouterLink}
+                                color="indigo.700"
+                                to={`/users/${claim.approvedBy.id}`}
+                            >
+                                {claim.approvedBy.name}
+                            </Link>
+                        </DD>
+                    </React.Fragment>
+                ) : null}
                 <DT>Kustannuspaikka</DT>
                 <DD>
                     <Link
@@ -225,10 +219,18 @@ const renderClaim = (claim) =>
                 <DD>{sourcesOfMoney[claim.sourceOfMoney]}</DD>
                 <DT>Luotu</DT>
                 <DD>{formatDateTime(claim.created)}</DD>
-                <DT>Muokattu</DT>
-                <DD>{claim.modified ? formatDateTime(claim.modified) : "-"}</DD>
-                <DT>Lisätiedot</DT>
-                <DD>{claim.details || "-"}</DD>
+                {claim.modified ? (
+                    <React.Fragment>
+                        <DT>Muokattu</DT>
+                        <DD>{formatDateTime(claim.modified)}</DD>
+                    </React.Fragment>
+                ) : null}
+                {claim.details ? (
+                    <React.Fragment>
+                        <DT>Lisätiedot</DT>
+                        <DD>{claim.details}</DD>
+                    </React.Fragment>
+                ) : null}
             </DL>
             <Divider my={6} />
             <Heading as="h3" size="md" mb={6}>

@@ -34,7 +34,7 @@ export const TD = (props) => (
         borderColor="gray.200"
         as="td"
         px={[3, 4]}
-        py={1}
+        py={3}
         {...props}
     />
 );

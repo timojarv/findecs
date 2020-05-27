@@ -1,82 +1,45 @@
 import React from "react";
-import { Link as RouterLink } from "react-router-dom";
-import {
-    Heading,
-    Box,
-    FormControl,
-    FormLabel,
-    Input,
-    Select,
-    InputGroup,
-    InputRightElement,
-    IconButton,
-    useDisclosure,
-    FormHelperText,
-    Button,
-    Flex,
-    FormErrorMessage,
-} from "@chakra-ui/core";
-import { roles } from "../../util/metadata";
+import { Heading, Box } from "@chakra-ui/core";
+import UserForm from "../../forms/UserForm";
+import { useMutation } from "urql";
+import ErrorDisplay from "../../components/ErrorDisplay";
+import { useMessage } from "../../util/message";
+
+const mutation = `
+    mutation CreateUser($user: UserInput!) {
+        createUser(user: $user) {
+            id
+            name
+            email
+            role
+            hasPassword
+            signature
+        }
+    }
+`;
 
 const NewUser = (props) => {
-    const { isOpen, onToggle } = useDisclosure();
+    const [creation, createUser] = useMutation(mutation);
+    const { successMessage, errorMessage } = useMessage();
+    const handleSubmit = (data) => {
+        createUser({ user: data }).then(({ error }) => {
+            if (error) {
+                errorMessage(error.message);
+            } else {
+                successMessage("Käyttäjä luotu");
+                props.history.push(`/users`);
+            }
+        });
+    };
 
     return (
-        <Box maxWidth="400px" margin="auto" mt={8} as="form">
+        <Box maxWidth="400px" margin="auto" mt={8}>
             <Heading mb={8}>Uusi käyttäjä</Heading>
-            <FormControl isRequired mb={4}>
-                <FormLabel htmlFor="name">Nimi</FormLabel>
-                <Input type="text" name="name" />
-                <FormErrorMessage>Nimi on jo käytössä</FormErrorMessage>
-            </FormControl>
-            <FormControl isRequired mb={4}>
-                <FormLabel htmlFor="email">Sähköposti</FormLabel>
-                <Input type="email" name="email" />
-                <FormErrorMessage>Sähköposti ei kelpaa</FormErrorMessage>
-            </FormControl>
-            <FormControl isRequired mb={4}>
-                <FormLabel htmlFor="role">Rooli</FormLabel>
-                <Select name="role">
-                    {Object.keys(roles).map((role, i) => (
-                        <option key={role} value={role}>
-                            {roles[role].label}
-                        </option>
-                    ))}
-                </Select>
-            </FormControl>
-            <FormControl mb={4}>
-                <FormLabel htmlFor="password">Salasana</FormLabel>
-                <InputGroup>
-                    <Input
-                        type={isOpen ? "text" : "password"}
-                        name="password"
-                    />
-                    <InputRightElement>
-                        <IconButton
-                            icon="view"
-                            variant="ghost"
-                            variantColor={isOpen ? "indigo" : "gray"}
-                            onClick={onToggle}
-                        />
-                    </InputRightElement>
-                </InputGroup>
-                <FormHelperText>
-                    Mikäli salasanaa ei aseteta, käyttäjälle lähetetään
-                    sähköposti salasanan vaihtamista varten.
-                </FormHelperText>
-            </FormControl>
-
-            <Flex pt={4} justify="space-between">
-                <Button
-                    to="/users"
-                    as={RouterLink}
-                    leftIcon="arrow-back"
-                    mr={2}
-                >
-                    Peruuta
-                </Button>
-                <Button variantColor="indigo">Luo käyttäjä</Button>
-            </Flex>
+            <ErrorDisplay error={creation.error} />
+            <UserForm
+                onSubmit={handleSubmit}
+                isSubmitting={creation.fetching}
+            />
         </Box>
     );
 };

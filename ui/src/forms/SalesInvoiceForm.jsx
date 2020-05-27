@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
     FormControl,
     FormLabel,
@@ -13,19 +13,38 @@ import { useForm } from "react-hook-form";
 
 const SalesInvoiceForm = (props) => {
     const { isSubmitting, data, onSubmit } = props;
-    const { register, control, watch, handleSubmit } = useForm();
+    const { register, control, watch, handleSubmit, reset } = useForm();
+
+    useEffect(() => {
+        if (!data) return;
+        reset({
+            ...data,
+            recipient: {
+                value: data.recipient.id,
+                label: data.recipient.name,
+            },
+            rows: data.rows.map((row) => ({
+                ...row,
+                costPool: row.costPool.id,
+            })),
+        });
+    }, [data, reset]);
+
     return (
         <form
             onSubmit={handleSubmit((form) => {
-                if (typeof onSubmit === "function") onSubmit(form);
+                if (typeof onSubmit === "function")
+                    onSubmit({
+                        ...form,
+                        recipient: form.recipient.value,
+                    });
             })}
         >
             <Flex mb={4} width="100%" align="flex-end">
-                <FormControl flexGrow={1} isRequired mr={4}>
+                <FormControl flexGrow={1} isRequired>
                     <FormLabel htmlFor="recipient">Vastaanottaja</FormLabel>
                     <ContactSearch name="recipient" control={control} />
                 </FormControl>
-                <Button>Uusi yhteystieto</Button>
             </Flex>
             <Flex width="100%" justify="stretch">
                 <FormControl width="50%" isRequired mr={4} mb={4}>

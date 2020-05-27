@@ -1,1 +1,0 @@
-ALTER TABLE cost_claims RENAME COLUMN status_reason TO note;

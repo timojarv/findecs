@@ -1,9 +1,10 @@
-import React, { useContext } from "react";
-import { Box, Heading, Button, useToast } from "@chakra-ui/core";
+import React from "react";
+import { Box, Heading, Button } from "@chakra-ui/core";
 import CostClaimForm from "../../forms/CostClaimForm";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "urql";
 import ErrorDisplay from "../../components/ErrorDisplay";
+import { useMessage } from "../../util/message";
 
 const query = `
     query FetchCostClaim ($id: ID!) {
@@ -20,12 +21,13 @@ const query = `
             created
             modified
             status
-            acceptedBy {
+            approvedBy {
                 id
                 name
                 email
             }
             sourceOfMoney
+            otherIban
             costPool {
                 id
                 name
@@ -56,12 +58,13 @@ const mutation = `
             created
             modified
             status
-            acceptedBy {
+            approvedBy {
                 id
                 name
                 email
             }
             sourceOfMoney
+            otherIban
             costPool {
                 id
                 name
@@ -82,7 +85,7 @@ const EditCostClaim = (props) => {
 
     const [result] = useQuery({ query, variables: { id } });
     const [update, updateCostClaim] = useMutation(mutation);
-    const toast = useToast();
+    const { infoMessage, errorMessage } = useMessage();
 
     const data = (result.data || {}).costClaim;
 
@@ -94,23 +97,15 @@ const EditCostClaim = (props) => {
                 costPool: data.costPool,
                 sourceOfMoney: data.sourceOfMoney,
                 details: data.details,
+                otherIban: data.otherIban || null,
             },
             receipts: data.receipts,
         }).then(({ error }) => {
             if (!error) {
-                toast({
-                    status: "success",
-                    title: "Kulukorvaus päivitetty",
-                    position: "top",
-                });
+                infoMessage("Kulukorvaus päivitetty");
                 props.history.push(`/costClaims/${id}`);
             } else {
-                toast({
-                    status: "error",
-                    title: "Jotain meni vikaan!",
-                    description: error.message,
-                    position: "top",
-                });
+                errorMessage(error.message);
             }
         });
     };

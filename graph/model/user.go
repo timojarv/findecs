@@ -7,4 +7,7 @@ type User struct {
 	Signature    *string  `json:"signature"`
 	Role         UserRole `json:"role"`
 	PasswordHash string   `db:"pw_hash"`
+	Position     string   `json:"position"`
+	Phone        *string  `json:"phone"`
+	Iban         *string  `json:"iban"`
 }

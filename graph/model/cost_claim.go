@@ -11,6 +11,16 @@ type CostClaim struct {
 	Details       *string       `json:"details"`
 	Created       string        `json:"created"`
 	Modified      *string       `json:"modified"`
-	AcceptedByID  *string       `json:"acceptedBy" db:"accepted_by"`
+	ApprovedByID  *string       `json:"approvedBy" db:"approved_by"`
 	SourceOfMoney SourceOfMoney `json:"sourceOfMoney" db:"source_of_money"`
+	OtherIBAN     *string       `json:"otherIban" db:"other_iban"`
+}
+
+// CostClaimInput is the input type for cost claims
+type CostClaimInput struct {
+	Description   string        `json:"description"`
+	CostPool      string        `json:"costPool"`
+	Details       *string       `json:"details"`
+	SourceOfMoney SourceOfMoney `json:"sourceOfMoney"`
+	OtherIBAN     *string       `json:"otherIban"`
 }

@@ -1,0 +1,1 @@
+ALTER TABLE cost_claims ADD COLUMN other_iban VARCHAR(255);

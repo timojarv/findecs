@@ -14,6 +14,7 @@ import { APIHost } from "../../util/api";
 import { useQuery } from "urql";
 import ErrorDisplay from "../../components/ErrorDisplay";
 import IndecsLogo from "../../resources/indecs.svg";
+import Signature from "../../components/Signature";
 
 const query = `
     query FetchCostClaim ($id: ID!) {
@@ -25,15 +26,17 @@ const query = `
                 id
                 name
                 email
+                signature
             }
             details
             created
             modified
             status
-            acceptedBy {
+            approvedBy {
                 id
                 name
                 email
+                signature
             }
             sourceOfMoney
             costPool {
@@ -55,7 +58,7 @@ const Label = (props) => (
     <Text display="block" fontSize="md" fontWeight="semibold" {...props} />
 );
 
-const Cell = (props) => <Box py={2} as="td" {...props} />;
+const Cell = (props) => <Box py={2} verticalAlign="top" as="td" {...props} />;
 
 const Claim = ({ claim }) => (
     <Box fontSize="lg" width="200mm" position="relative">
@@ -63,7 +66,7 @@ const Claim = ({ claim }) => (
             position="absolute"
             as={IndecsLogo}
             width="100%"
-            opacity={0.04}
+            opacity={0.01}
             zIndex={0}
             top={0}
         />
@@ -154,10 +157,16 @@ const Claim = ({ claim }) => (
                 <tr>
                     <Cell>
                         <Label>Paikka ja päiväys</Label>
-                        Tampere, {formatDate(claim.modified)}
+                        Tampere, {formatDate(claim.modified || claim.created)}
                     </Cell>
                     <Cell>
-                        <Label>Allekirjoitus</Label>-
+                        <Label>Allekirjoitus</Label>
+                        {claim.author && claim.author.signature ? (
+                            <Signature
+                                border={0}
+                                filename={claim.author.signature}
+                            />
+                        ) : null}
                     </Cell>
                 </tr>
                 <tr>
@@ -166,6 +175,12 @@ const Claim = ({ claim }) => (
                     </Cell>
                     <Cell>
                         <Label>Hyväksyjän kuittaus</Label>
+                        {claim.approvedBy && claim.approvedBy.signature ? (
+                            <Signature
+                                border={0}
+                                filename={claim.approvedBy.signature}
+                            />
+                        ) : null}
                     </Cell>
                 </tr>
             </tbody>

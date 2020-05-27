@@ -21,6 +21,16 @@ scalar Date
 scalar DateTime
 scalar Upload
 
+type SystemInfo {
+    database: String!
+    serverVersion: String!
+}
+
+input ViewOptions {
+    author: String!
+    status: String!
+}
+
 type User {
     id: ID!
     name: String!
@@ -29,6 +39,11 @@ type User {
     position: String!
     role: UserRole!
     hasPassword: Boolean!
+    phone: String
+    iban: String
+    costClaims: [CostClaim!]!
+    purchaseInvoices: [PurchaseInvoice!]!
+    salesInvoices: [SalesInvoice!]!
 }
 
 input UserInput {
@@ -44,6 +59,8 @@ input SettingsInput {
     position: String!
     signature: Upload
     newPassword: String
+    phone: String!
+    iban: String!
 }
 
 type Receipt {
@@ -75,6 +92,11 @@ input CostPoolInput {
     budget: Float!
 }
 
+type CostPoolsConnection {
+    nodes: [CostPool!]!
+    totalCount: Int!
+}
+
 type CostClaim {
     id: ID!
     runningNumber: Int!
@@ -85,18 +107,24 @@ type CostClaim {
     details: String
     created: DateTime!
     modified: DateTime
-    acceptedBy: User
+    approvedBy: User
     sourceOfMoney: SourceOfMoney!
+    otherIban: String
     receipts: [Receipt!]!
     total: Float!
 }
 
 input CostClaimInput {
     description: String!
-    author: ID!
     costPool: ID!
     details: String
     sourceOfMoney: SourceOfMoney!
+    otherIban: String
+}
+
+type CostClaimsConnection {
+    nodes: [CostClaim!]!
+    totalCount: Int!
 }
 
 type Contact {
@@ -118,6 +146,7 @@ type ContactsConnection {
 }
 
 input InvoiceRowInput {
+    id: ID
     costPool: ID!
     description: String!
     amount: Float!
@@ -133,10 +162,13 @@ type SalesInvoiceRow {
 
 type SalesInvoice {
     id: ID!
+    author: User!
     runningNumber: Int!
     recipient: Contact!
     date: Date!
     dueDate: Date!
+    created: DateTime!
+    modified: DateTime
     status: Status!
     details: String
     payerReference: String
@@ -169,10 +201,12 @@ type PurchaseInvoiceRow {
 
 type PurchaseInvoice {
     id: ID!
+    author: User!
     sender: Contact!
     description: String!
     dueDate: Date!
     status: Status!
+    approvedBy: User
     created: DateTime!
     modified: DateTime
     details: String
@@ -194,15 +228,17 @@ type PurchaseInvoicesConnection {
 }
 
 type Query {
-    costClaims(limit: Int = 20, offset: Int! = 0): [CostClaim!]!
-    costClaimCount: Int!
+    costClaims(
+        limit: Int = 20
+        offset: Int! = 0
+        viewOptions: ViewOptions
+    ): CostClaimsConnection!
     costClaim(id: ID!): CostClaim
 
     user(id: ID): User!
     users(limit: Int = 20, offset: Int! = 0): [User!]!
 
-    costPools(limit: Int = 20, offset: Int! = 0): [CostPool!]!
-    costPoolCount: Int!
+    costPools(limit: Int = 20, offset: Int! = 0): CostPoolsConnection!
     costPool(id: ID!): CostPool!
 
     contacts(
@@ -215,11 +251,18 @@ type Query {
     purchaseInvoices(
         limit: Int = 20
         offset: Int! = 0
+        viewOptions: ViewOptions
     ): PurchaseInvoicesConnection!
     purchaseInvoice(id: ID!): PurchaseInvoice!
 
-    salesInvoices(limit: Int = 20, offset: Int! = 0): SalesInvoicesConnection!
+    salesInvoices(
+        limit: Int = 20
+        offset: Int! = 0
+        viewOptions: ViewOptions
+    ): SalesInvoicesConnection!
     salesInvoice(id: ID!): SalesInvoice!
+
+    systemInfo: SystemInfo!
 }
 
 type Mutation {

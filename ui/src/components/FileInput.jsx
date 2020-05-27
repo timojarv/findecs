@@ -5,7 +5,7 @@ import { useDropzone } from "react-dropzone";
 
 const FileInput = ({ onChange, isDisabled, accept, ...props }) => {
     const { getRootProps, getInputProps } = useDropzone({
-        onDropAccepted: onChange,
+        onDropApproved: onChange,
         disabled: isDisabled,
         accept: accept,
     });

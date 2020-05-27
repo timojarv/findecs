@@ -12,7 +12,6 @@ import {
     ModalContent,
     ModalHeader,
     ModalBody,
-    useToast,
     Text,
     AlertDialog,
     AlertDialogOverlay,
@@ -27,6 +26,10 @@ import { Link as RouterLink, useHistory } from "react-router-dom";
 import { Edit, Trash2 } from "react-feather";
 import ContactForm from "../../forms/ContactForm";
 import { DL, DT, DD } from "../../components/DescriptionList";
+import { TableContainer } from "../../components/Table";
+import PurchaseInvoiceList from "../../components/PurchaseInvoiceList";
+import SalesInvoiceList from "../../components/SalesInvoiceList";
+import { useMessage } from "../../util/message";
 
 const query = `
     query FetchContactItems($id: ID!) {
@@ -36,9 +39,25 @@ const query = `
             address
             salesInvoices {
                 id
+                runningNumber
+                date
+                dueDate
+                total
+                recipient {
+                    id
+                    name
+                }
             }
             purchaseInvoices {
                 id
+                description
+                created
+                dueDate
+                total
+                sender {
+                    id
+                    name
+                }
             }
         }
     }
@@ -66,24 +85,15 @@ const ContactDelete = (props) => {
     const { isOpen, onOpen, onClose } = useDisclosure();
     const cancelRef = useRef();
     const [deletion, deleteContact] = useMutation(deleteMutation);
-    const toast = useToast();
+    const { errorMessage, infoMessage } = useMessage();
     const history = useHistory();
 
     const handleDelete = () => {
         deleteContact({ id }).then(({ error }) => {
             if (error) {
-                toast({
-                    status: "error",
-                    title: "Tapahtui virhe!",
-                    description: error.message,
-                    position: "top",
-                });
+                errorMessage(error.msg);
             } else {
-                toast({
-                    status: "info",
-                    title: "Yhteystieto poistettu",
-                    position: "top",
-                });
+                infoMessage("Yhteystieto poistettu");
                 history.push("/contacts");
             }
         });
@@ -128,24 +138,15 @@ const ContactView = (props) => {
 
     const { isOpen, onOpen, onClose } = useDisclosure();
     const [update, updateContact] = useMutation(mutation);
-    const toast = useToast();
+    const { infoMessage, errorMessage } = useMessage();
 
     const onSubmit = (data) => {
         updateContact({ id: contact.id, contact: data }).then((res) => {
             if (!res.error) {
                 onClose();
-                toast({
-                    title: "Yhteystieto päivitetty",
-                    status: "success",
-                    position: "top",
-                });
+                infoMessage("Yhteystieto päivitetty");
             } else {
-                toast({
-                    title: "Jokin meni vikaan!",
-                    description: res.error.message,
-                    status: "error",
-                    position: "top",
-                });
+                errorMessage(res.error.message);
             }
         });
     };
@@ -153,7 +154,7 @@ const ContactView = (props) => {
     return (
         <React.Fragment>
             <Heading as="h2">{contact.name}</Heading>
-            <Flex align="center" mb={6}>
+            <Flex align="center" mt={2} mb={6}>
                 <Text fontSize="xl" color="gray.600">
                     Yhteystieto
                 </Text>
@@ -202,15 +203,27 @@ const ContactView = (props) => {
                     <Heading my={4} as="h3" size="lg">
                         Liittyvät ostolaskut
                     </Heading>
+                    <TableContainer mt={8}>
+                        <PurchaseInvoiceList
+                            disabledColumns={["sender"]}
+                            invoices={contact.purchaseInvoices}
+                        />
+                    </TableContainer>
                 </React.Fragment>
             ) : null}
 
             {contact.salesInvoices.length > 0 ? (
                 <React.Fragment>
-                    <Divider my={6} />
+                    <Divider my={8} />
                     <Heading my={4} as="h3" size="lg">
                         Liittyvät myyntilaskut
                     </Heading>
+                    <TableContainer mt={8}>
+                        <SalesInvoiceList
+                            disabledColumns={["recipient"]}
+                            invoices={contact.salesInvoices}
+                        />
+                    </TableContainer>
                 </React.Fragment>
             ) : null}
 
@@ -218,6 +231,7 @@ const ContactView = (props) => {
                 isOpen={isOpen}
                 onClose={onClose}
                 closeOnOverlayClick={false}
+                preserveScrollBarGap={true}
             >
                 <ModalOverlay />
                 <ModalContent rounded="md">
@@ -260,7 +274,7 @@ const Contact = (props) => {
             </Button>
             {fetching ? <Spinner color="indigo.500" display="block" /> : null}
             <ErrorDisplay error={error} />
-            {data ? <ContactView contact={data.contact} /> : null}
+            {data && !error ? <ContactView contact={data.contact} /> : null}
         </Box>
     );
 };
