@@ -44,15 +44,10 @@ const NewCostClaim = (props) => {
     const [creation, createCostClaim] = useMutation(mutation);
     const { successMessage, errorMessage } = useMessage();
 
-    const handleSubmit = (data) => {
+    const handleSubmit = ({receipts, ...costClaim}) => {
         createCostClaim({
-            costClaim: {
-                description: data.description,
-                costPool: data.costPool,
-                sourceOfMoney: data.sourceOfMoney,
-                details: data.details,
-            },
-            receipts: data.receipts,
+            costClaim,
+            receipts,
         }).then(({ error, data }) => {
             if (!error) {
                 successMessage("Kulukorvaus luotu");

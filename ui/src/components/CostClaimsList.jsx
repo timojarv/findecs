@@ -5,64 +5,69 @@ import { formatDate, formatCurrency } from "../util/format";
 import { Link as RouterLink } from "react-router-dom";
 import { statusColors, statuses } from "../util/metadata";
 
-const CostClaimsList = (props) => {
-    const { claims = [], disabledColumns = [] } = props;
+const ClaimRow = ({ claim, display }) => {
+    return (
+        <TR key={claim.id}>
+            <TD display={display("description")}>
+                <Link
+                    as={RouterLink}
+                    to={`/costClaims/${claim.id}`}
+                    color="indigo.700"
+                    display="block"
+                >
+                    {claim.description}
+                </Link>
+            </TD>
+            <TD display={display("author", ["none", "table-cell"])}>
+                <Link
+                    whiteSpace="nowrap"
+                    as={RouterLink}
+                    to={`/users/${claim.author.id}`}
+                    color="indigo.700"
+                >
+                    {claim.author.name}
+                </Link>
+            </TD>
+            <TD display={display("created")} textAlign="right">{formatDate(claim.created)}</TD>
+            <TD display={display("total")} textAlign="right">{formatCurrency(claim.total)}</TD>
+            <TD display={display("status")} textAlign="right">
+                <Badge
+                    fontSize="0.8em"
+                    mr={-1}
+                    variantColor={statusColors[claim.status]}
+                >
+                    {statuses[claim.status]}
+                </Badge>
+            </TD>
+        </TR>
+    );
+};
 
-    const display = (key) =>
-        disabledColumns.includes(key) ? "none" : "table-cell";
+const CostClaimsList = (props) => {
+    const { claims = [], disabledColumns = [], sortable = () => ({}) } = props;
+
+    const display = (key, defaultOptions = "table-cell") =>
+        disabledColumns.includes(key) ? "none" : defaultOptions;
 
     return (
         <Table>
             <THead>
                 <TR>
-                    <TH textAlign="left">Kuvaus</TH>
-                    <TH display={display("author")} textAlign="left">
+                    <TH display={display("description")} {...sortable('description')} textAlign="left">Kuvaus</TH>
+                    <TH display={display("author", ["none", "table-cell"])}
+                        {...sortable('author')}
+                        textAlign="left"
+                    >
                         Tekijä
                     </TH>
-                    <TH display={["none", "table-cell"]} textAlign="left">
-                        Luotu
-                    </TH>
-                    <TH textAlign="right">Summa</TH>
-                    <TH display={["none", "table-cell"]} textAlign="right">
-                        Tila
-                    </TH>
+                    <TH display={display("created")} {...sortable('created')} textAlign="right">Luotu</TH>
+                    <TH display={display("total")} {...sortable('total')} textAlign="right">Summa</TH>
+                    <TH display={display("status")} {...sortable('status')} textAlign="right">Tila</TH>
                 </TR>
             </THead>
             <TBody>
-                {claims.map((claim) => (
-                    <TR key={claim.id}>
-                        <TD>
-                            <Link
-                                as={RouterLink}
-                                color="indigo.700"
-                                to={`/costClaims/${claim.id}`}
-                            >
-                                {claim.description}
-                            </Link>
-                        </TD>
-                        <TD display={display("author")}>
-                            <Link
-                                as={RouterLink}
-                                color="indigo.700"
-                                to="/users"
-                            >
-                                {claim.author.name}
-                            </Link>
-                        </TD>
-                        <TD display={["none", "table-cell"]}>
-                            {formatDate(claim.created)}
-                        </TD>
-                        <TD textAlign="right">{formatCurrency(claim.total)}</TD>
-                        <TD display={["none", "table-cell"]} textAlign="right">
-                            <Badge
-                                fontSize="0.8em"
-                                mr={-1}
-                                variantColor={statusColors[claim.status]}
-                            >
-                                {statuses[claim.status]}
-                            </Badge>
-                        </TD>
-                    </TR>
+                {claims.filter(v => !!v).map((claim) => (
+                    <ClaimRow key={claim.id} claim={claim} display={display} />
                 ))}
             </TBody>
         </Table>

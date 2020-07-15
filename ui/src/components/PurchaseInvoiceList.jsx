@@ -5,7 +5,7 @@ import { Table, THead, TBody, TR, TH, TD } from "./Table";
 import { formatDate, formatCurrency } from "../util/format";
 
 const PurchaseInvoiceList = (props) => {
-    const { invoices, disabledColumns = [] } = props;
+    const { invoices, sortable = () => ({}), disabledColumns = [] } = props;
 
     const display = (key) =>
         disabledColumns.includes(key) ? "none" : "table-cell";
@@ -14,13 +14,13 @@ const PurchaseInvoiceList = (props) => {
         <Table>
             <THead>
                 <TR>
-                    <TH textAlign="left">Kuvaus</TH>
-                    <TH display={display("sender")} textAlign="left">
+                    <TH {...sortable('description')} textAlign="left">Kuvaus</TH>
+                    <TH {...sortable('sender')} display={display("sender")} textAlign="left">
                         Lähettäjä
                     </TH>
-                    <TH textAlign="right">Luotu</TH>
-                    <TH textAlign="right">Summa</TH>
-                    <TH textAlign="right">Eräpäivä</TH>
+                    <TH {...sortable('created')} textAlign="right">Luotu</TH>
+                    <TH {...sortable('total')} textAlign="right">Summa</TH>
+                    <TH {...sortable('dueDate')} textAlign="right">Eräpäivä</TH>
                 </TR>
             </THead>
             <TBody>

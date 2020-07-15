@@ -90,6 +90,7 @@ const CostClaimForm = (props) => {
     const costPools = result.data ? result.data.costPools.nodes : [];
 
     const handleAddFiles = (files) => {
+        console.log("File added")
         files.forEach((file) => {
             append({
                 attachment: file.name,

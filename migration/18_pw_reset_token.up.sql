@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN (reset_token VARCHAR(64), reset_expiry DATETIME);

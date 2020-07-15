@@ -27,6 +27,7 @@ import { TableContainer } from "../../components/Table";
 import SalesInvoiceList from "../../components/SalesInvoiceList";
 import PurchaseInvoiceList from "../../components/PurchaseInvoiceList";
 import CostClaimsList from "../../components/CostClaimsList";
+import { useAccess } from "../../util/hooks";
 
 const query = `
     query GetUserData($id: ID!) {
@@ -134,6 +135,7 @@ const UserDelete = (props) => {
 
 const UserView = (props) => {
     const { user } = props;
+    const access = useAccess();
 
     return (
         <React.Fragment>
@@ -151,6 +153,7 @@ const UserView = (props) => {
                     size="sm"
                     as={RouterLink}
                     to={`/users/${user.id}/edit`}
+                    display={access("root") || 'inline-flex'}
                 >
                     <Text display={["none", "inline-block"]} mr={2}>
                         Muokkaa
@@ -164,6 +167,7 @@ const UserView = (props) => {
                         variant="outline"
                         variantColor="red"
                         size="sm"
+                        display={access("root") || 'inline-flex'}
                     >
                         <Text display={["none", "inline-block"]} mr={2}>
                             Poista

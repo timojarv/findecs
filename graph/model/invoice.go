@@ -12,6 +12,8 @@ type PurchaseInvoice struct {
 	Modified     *string `json:"modified"`
 	Details      *string `json:"details"`
 	Note         *string `json:"note"`
+	SenderName   *string `db:"sender_name"`
+	Total        float64 `json:"total" db:"total"`
 }
 
 type SalesInvoice struct {
@@ -27,6 +29,8 @@ type SalesInvoice struct {
 	Details             *string `json:"details"`
 	PayerReference      *string `json:"payerReference" db:"payer_reference"`
 	ContactPerson       *string `json:"contactPerson" db:"contact_person"`
+	RecipientName       *string `db:"recipient_name"`
+	Total               float64 `json:"total" db:"total"`
 }
 
 type InvoiceRow struct {

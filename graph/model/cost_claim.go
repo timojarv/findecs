@@ -7,13 +7,15 @@ type CostClaim struct {
 	Description   string        `json:"description"`
 	AuthorID      string        `json:"author" db:"author"`
 	CostPoolID    string        `json:"costPool" db:"cost_pool"`
-	Status        Status        `json:"status"`
 	Details       *string       `json:"details"`
 	Created       string        `json:"created"`
 	Modified      *string       `json:"modified"`
-	ApprovedByID  *string       `json:"approvedBy" db:"approved_by"`
 	SourceOfMoney SourceOfMoney `json:"sourceOfMoney" db:"source_of_money"`
 	OtherIBAN     *string       `json:"otherIban" db:"other_iban"`
+	Total         float64       `json:"total" db:"total"`
+	AuthorName    *string       `db:"author_name"`
+	Status        string        `db:"status"`
+	ApprovedByID  *string       `db:"approved_by"`
 }
 
 // CostClaimInput is the input type for cost claims

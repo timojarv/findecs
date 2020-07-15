@@ -2,11 +2,14 @@ package graph
 
 import (
 	"context"
+	"crypto/rand"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/mailgun/mailgun-go"
 	log "github.com/sirupsen/logrus"
 	"github.com/teris-io/shortid"
 	"github.com/timojarv/findecs/graph/model"
@@ -25,9 +28,13 @@ type Resolver struct {
 	DB            *sqlx.DB
 	ShortID       *shortid.Shortid
 	ServerVersion string
+	Mailgun       *mailgun.MailgunImpl
+	URL           string
 }
 
 var errNotAuthenticated = errors.New("not authenticated")
+var errUnauthorized = errors.New("unauthorized")
+var errInvalidResetToken = errors.New("invalid reset token")
 
 func (r *Resolver) createReceipt(ctx context.Context, receipt *model.ReceiptInput, costClaimID string, tx *sqlx.Tx) error {
 	// Form a file name for the attachment
@@ -71,6 +78,8 @@ func (r *Resolver) MakeUser(ctx context.Context, user model.UserInput) (*model.U
 
 	if err == nil && user.Password != nil && *user.Password != "" {
 		err = r.setUserPassword(ctx, newUser.ID, *user.Password)
+	} else if err == nil {
+		err = r.sendPasswordResetEmail(ctx, user.Email)
 	}
 
 	return &newUser, err
@@ -85,7 +94,7 @@ func (r *Resolver) setUserPassword(ctx context.Context, userID, password string)
 	}
 
 	_, err = r.DB.ExecContext(ctx, `
-		UPDATE users SET pw_hash = ? WHERE id = ?
+		UPDATE users SET pw_hash = ?, reset_token = NULL, reset_expiry = NULL WHERE id = ?
 	`, hash, userID)
 
 	return err
@@ -98,4 +107,117 @@ func (r *Resolver) createInvoiceRow(ctx context.Context, row *model.InvoiceRowIn
 	`, invoiceType), r.ShortID.MustGenerate(), invoiceID, row.CostPool, row.Description, row.Amount)
 
 	return err
+}
+
+// Generate a password reset token and send it to users email
+func (r *Resolver) sendPasswordResetEmail(ctx context.Context, email string) error {
+	b := make([]byte, 16)
+	rand.Read(b)
+	token := fmt.Sprintf("%x", b)
+
+	// Insert token into DB, see if email exists
+	res, err := r.DB.ExecContext(ctx, `
+		UPDATE users SET reset_token = ?, reset_expiry = (CURRENT_TIMESTAMP + INTERVAL 24 HOUR) WHERE email = ?
+	`, token, email)
+
+	if err != nil {
+		return err
+	}
+
+	exists, _ := res.RowsAffected()
+
+	// Be opaque of whether this succeeded
+	if exists == 0 {
+		log.WithField("email", email).Printf("Password reset requested for nonexistent email")
+		return nil
+	}
+
+	from := fmt.Sprintf("Findecs <findecs@%s>", r.Mailgun.Domain())
+
+	link := fmt.Sprintf("%s/#/resetPassword?token=%s", r.URL, token)
+
+	msg := mailgun.NewMessage(
+		from,
+		"Findecs - aseta uusi salasana",
+		"Voit asettaa uuden salasanan tästä linkistä: "+link,
+		email,
+	)
+
+	msg.SetHtml(fmt.Sprintf(`
+		<strong>Voit asettaa uuden salasanan alla olevasta linkistä 24 tunnin sisällä.</strong>
+		<a style="display: block;font-weight: bold;color: darkcyan;border-radius:0.5rem;margin:0.5rem 0;" href="%s" target="_blank">Aseta salasana</a>
+		Jos et pyytänyt salasanan palautusta, ei tähän viestiin tarvitse reagoida.
+	`, link))
+
+	mes, id, err := r.Mailgun.Send(msg)
+
+	if err == nil {
+		log.WithFields(log.Fields{
+			"response": mes,
+			"id":       id,
+			"email":    email,
+		}).Printf("Password reset email sent")
+	} else {
+		log.Print(err)
+	}
+
+	return err
+}
+
+// Reset user password after they have a reset token
+func (r *Resolver) resetPassword(ctx context.Context, token, newPassword string) error {
+	var userID string
+	err := r.DB.GetContext(ctx, &userID, `
+		SELECT id FROM users WHERE reset_token = ? AND reset_expiry > CURRENT_TIMESTAMP
+	`, token)
+
+	if err == sql.ErrNoRows {
+		return errInvalidResetToken
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return r.setUserPassword(ctx, userID, newPassword)
+}
+
+// Generate a comment for the event if necessary
+func (r *Resolver) generateCommentForEvent(ctx context.Context, event *model.Event, id string) {
+	if event.Status == model.StatusPaid {
+		var results struct {
+			Iban      *string `db:"iban"`
+			OtherIban *string `db:"other_iban"`
+		}
+
+		err := r.DB.GetContext(ctx, &results, `
+		SELECT u.iban, cc.other_iban
+		FROM cost_claims cc
+		JOIN users u ON cc.author = u.id
+		WHERE cc.id = ?
+		`, id)
+		if err != nil {
+			log.Error(err)
+		}
+
+		if iban := results.OtherIban; iban != nil {
+			comment := fmt.Sprintf("Tilille %s", *iban)
+			event.Comment = &comment
+		} else if iban := results.Iban; iban != nil {
+			comment := fmt.Sprintf("Tilille %s", *iban)
+			event.Comment = &comment
+		}
+	}
+}
+
+var validActions = []string{"list", "get", "create", "update", "delete"}
+
+func validAction(action string) bool {
+	for _, ac := range validActions {
+		if action == ac {
+			return true
+		}
+	}
+
+	return false
 }

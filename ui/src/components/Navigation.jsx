@@ -15,6 +15,7 @@ import { Menu as Hamburger, X } from "react-feather";
 import FindecsLogo from "../resources/logo.svg";
 import { useMutation } from "urql";
 import { useMessage } from "../util/message";
+import { useAccess } from "../util/hooks";
 
 const mutation = `
     mutation Logout {
@@ -42,6 +43,7 @@ const Navigation = (props) => {
     const [open, setOpen] = useState(false);
     const [_, logout] = useMutation(mutation);
     const { infoMessage } = useMessage();
+    const access = useAccess();
 
     const handleToggle = () => setOpen(!open);
 
@@ -106,6 +108,7 @@ const Navigation = (props) => {
                         variant="ghost"
                         rightIcon="chevron-down"
                         mt={[1, 0]}
+                        display={access("admin")}
                     >
                         Hallinta
                     </MenuButton>

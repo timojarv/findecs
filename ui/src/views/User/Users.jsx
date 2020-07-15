@@ -15,6 +15,7 @@ import {
 import { useQuery } from "urql";
 import ErrorDisplay from "../../components/ErrorDisplay";
 import { roles } from "../../util/metadata";
+import { useAccess } from "../../util/hooks";
 
 const query = `
     query {
@@ -46,6 +47,7 @@ const UserCard = ({
     role,
     signature,
     hasPassword,
+    access,
     ...props
 }) => (
     <Flex
@@ -80,24 +82,27 @@ const UserCard = ({
             icon="edit"
             variant="ghost"
             variantColor="indigo"
+            display={access("root")}
         />
     </Flex>
 );
 
 const Users = (props) => {
     const [result] = useQuery({ query });
+    const access = useAccess();
 
     const users = result.data ? result.data.users : [];
 
     return (
         <Box maxWidth="800px" margin="auto" pt={8}>
-            <Heading as="h2">Käyttäjät</Heading>
+            <Heading mb={6} as="h2">Käyttäjät</Heading>
             <Button
                 my={6}
                 variantColor="indigo"
                 leftIcon="add"
                 as={RouterLink}
                 to="/users/new"
+                display={access("root") || 'inline-flex'}
             >
                 Luo uusi
             </Button>
@@ -105,7 +110,7 @@ const Users = (props) => {
             <ErrorDisplay error={result.error} />
             <Stack spacing={3}>
                 {users.map((user) => (
-                    <UserCard key={user.id} {...user} />
+                    <UserCard key={user.id} {...user} access={access} />
                 ))}
             </Stack>
         </Box>

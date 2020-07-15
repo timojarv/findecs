@@ -28,12 +28,13 @@ import CostPoolForm from "../../forms/CostPoolForm";
 import Pagination from "../../components/Pagination";
 import Empty from "../../components/Empty";
 import { useMessage } from "../../util/message";
+import { useSortable } from "../../util/hooks";
 
 const limit = 20;
 
 const query = `
-    query FetchCostPools($offset: Int! = 0) {
-        costPools(offset: $offset, limit: ${limit}) {
+    query FetchCostPools($offset: Int! = 0, $sortOptions: SortOptions) {
+        costPools(offset: $offset, limit: ${limit}, sortOptions: $sortOptions) {
             nodes {
                 id
                 name
@@ -61,9 +62,10 @@ const CostPools = (props) => {
     const { successMessage, errorMessage } = useMessage();
     const { isOpen, onOpen, onClose } = useDisclosure();
     const [offset, setOffset] = useState(0);
+    const [sortOptions, sortable] = useSortable({ key: 'name', order: 'asc' });
     const [result] = useQuery({
         query,
-        variables: { offset },
+        variables: { offset, sortOptions },
     });
 
     const { fetching, error, data } = result;
@@ -98,8 +100,8 @@ const CostPools = (props) => {
                 <Table>
                     <THead>
                         <TR>
-                            <TH textAlign="left">Nimi</TH>
-                            <TH textAlign="right">Budjetti</TH>
+                            <TH {...sortable('name')} textAlign="left">Nimi</TH>
+                            <TH {...sortable('budget')} textAlign="right">Budjetti</TH>
                             <TH
                                 display={["none", "table-cell"]}
                                 textAlign="right"
@@ -115,7 +117,7 @@ const CostPools = (props) => {
                         </TR>
                     </THead>
                     <TBody>
-                        {(pools || []).map((pool) => (
+                        {((!error && pools) ? pools : []).map((pool) => (
                             <TR key={pool.id}>
                                 <TD py={2}>
                                     <Link

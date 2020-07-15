@@ -8,12 +8,13 @@ import ErrorDisplay from "../../components/ErrorDisplay";
 import PurchaseInvoiceList from "../../components/PurchaseInvoiceList";
 import Empty from "../../components/Empty";
 import ViewOptions from "../../components/ViewOptions";
+import { useSortable } from "../../util/hooks";
 
 const limit = 20;
 
 const query = `
-    query FetchPurchaseInvoices($offset: Int! = 0, $viewOptions: ViewOptions) {
-        purchaseInvoices(limit: ${limit}, offset: $offset, viewOptions: $viewOptions) {
+    query FetchPurchaseInvoices($offset: Int! = 0, $viewOptions: ViewOptions, $sortOptions: SortOptions) {
+        purchaseInvoices(limit: ${limit}, offset: $offset, viewOptions: $viewOptions, sortOptions: $sortOptions) {
             nodes {
                 id
                 sender {
@@ -33,9 +34,10 @@ const query = `
 const PurchaseInvoices = (props) => {
     const [offset, setOffset] = useState(0);
     const [viewOptions, setViewOptions] = useState();
+    const [sortOptions, sortable] = useSortable({ key: 'created', order: 'desc' });
     const [result] = useQuery({
         query,
-        variables: { offset, viewOptions },
+        variables: { offset, viewOptions, sortOptions },
     });
 
     const { fetching, error, data } = result;
@@ -57,7 +59,7 @@ const PurchaseInvoices = (props) => {
             </Flex>
             <ErrorDisplay error={error} />
             <TableContainer>
-                <PurchaseInvoiceList invoices={invoices} />
+                <PurchaseInvoiceList sortable={sortable} invoices={invoices} />
                 <Empty visible={!invoices.length} />
                 <Pagination
                     isLoading={fetching}

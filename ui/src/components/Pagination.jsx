@@ -14,7 +14,7 @@ const Pagination = (props) => {
             py={2}
             position="relative"
         >
-            Näytetään rivit {offset + 1} - {Math.min(total, offset + limit)} /{" "}
+            Näytetään rivit {Math.min(offset + 1, total)} - {Math.min(total, offset + limit)} /{" "}
             {total}
             <Box flexGrow={1} />
             <IconButton

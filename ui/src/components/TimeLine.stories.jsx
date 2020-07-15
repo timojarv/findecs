@@ -64,14 +64,14 @@ export const withActions = () => (
                 {
                     icon: ArrowRightCircle,
                     actions: (
-                        <Box>
-                            <Button variant="ghost" variantColor="green">
+                        <>
+                            <Button px={2} py={1} variant="ghost" variantColor="green">
                                 Hyväksy
                             </Button>
-                            <Button ml={2} variant="ghost" variantColor="red">
+                            <Button ml={2} px={2} py={1} variant="ghost" variantColor="red">
                                 Hylkää
                             </Button>
-                        </Box>
+                        </>
                     ),
                 },
             ]}

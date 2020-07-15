@@ -10,9 +10,12 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/cors"
+	"github.com/mailgun/mailgun-go"
 	log "github.com/sirupsen/logrus"
 	"github.com/teris-io/shortid"
+	"github.com/timojarv/findecs/access"
 	"github.com/timojarv/findecs/graph"
 	"github.com/timojarv/findecs/graph/generated"
 	"github.com/timojarv/findecs/graph/model"
@@ -36,6 +39,7 @@ func main() {
 	flag.Parse()
 	if *debug {
 		log.SetLevel(log.DebugLevel)
+		log.Debug("Debugging logs enabled.")
 	}
 
 	log.Info("💸 Findecs 💸")
@@ -49,10 +53,14 @@ func main() {
 
 	router.Use(session.Middleware(store.DB.DB))
 
+	router.Use(middleware.Logger)
+
 	resolver := graph.Resolver{
 		DB:            store.DB,
 		ShortID:       shortid.MustNew(1, shortid.DefaultABC, 326691),
 		ServerVersion: "findecs-v0.1.0",
+		Mailgun:       mailgun.NewMailgun(os.Getenv("MAILGUN_DOMAIN"), os.Getenv("MAILGUN_KEY")),
+		URL:           os.Getenv("FINDECS_URL"),
 	}
 	srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &resolver}))
 
@@ -87,6 +95,8 @@ func main() {
 		FileServer(router, "/", http.Dir("ui"))
 		log.Info("Serving UI on root route.")
 	}
+
+	log.Debugf("%+v", access.Policy)
 
 	log.Fatal(http.ListenAndServe(":"+port, router))
 }

@@ -1,5 +1,7 @@
 import React from "react";
-import { Box, Flex, Heading, Text } from "@chakra-ui/core";
+import { Box, Flex, Heading, Text, PseudoBox, Tooltip } from "@chakra-ui/core";
+import { X } from "react-feather";
+import { RevokeAction } from "./StatusActions";
 
 const renderStep = (step, index, arr) => {
     const Icon = step.icon;
@@ -11,7 +13,7 @@ const renderStep = (step, index, arr) => {
                 align="center"
             >
                 <Icon size="1.8em" />
-                <Box ml={5} fontSize="sm" color="gray.500">
+                <Box flex={1} ml={5} fontSize="sm" color="gray.500">
                     {step.title && (
                         <Heading
                             color="gray.800"
@@ -34,6 +36,7 @@ const renderStep = (step, index, arr) => {
                     {step.comment && <Text>{step.comment}</Text>}
                     {step.actions}
                 </Box>
+                {step.delete}
             </Flex>
             {index < arr.length - 1 ? (
                 <Box

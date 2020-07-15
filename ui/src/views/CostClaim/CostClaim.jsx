@@ -11,7 +11,6 @@ import {
     Stack,
     IconButton,
     Link,
-    Badge,
     Spinner,
     useDisclosure,
     AlertDialog,
@@ -20,16 +19,20 @@ import {
     AlertDialogHeader,
     AlertDialogBody,
     AlertDialogFooter,
+    Input,
+    Badge,
 } from "@chakra-ui/core";
-import { Printer, Edit, Trash2, MessageSquare } from "react-feather";
+import { Printer, Edit, Trash2, Circle, CheckCircle, AlertCircle, Clock, ArrowRightCircle } from "react-feather";
 import { DL, DT, DD } from "../../components/DescriptionList";
-import { statuses, statusColors, sourcesOfMoney } from "../../util/metadata";
+import { sourcesOfMoney, statusColors, statuses } from "../../util/metadata";
 import { formatDateTime, formatCurrency, formatDate } from "../../util/format";
 import { APIHost } from "../../util/api";
 import { useQuery, useMutation } from "urql";
 import ErrorDisplay from "../../components/ErrorDisplay";
 import { useMessage } from "../../util/message";
-import StatusBadge from "../../components/StatusBadge";
+import { useAccess } from "../../util/hooks";
+import TimeLine from "../../components/TimeLine";
+import { ApproveAction, PaidAction, RevokeAction } from "../../components/StatusActions";
 
 const query = `
     query FetchCostClaim ($id: ID!) {
@@ -62,6 +65,12 @@ const query = `
                 attachment
             }
             total
+            events {
+                id
+                status
+                timestamp
+                comment
+            }
         }
     }
 `;
@@ -126,7 +135,75 @@ const CostClaimDelete = (props) => {
     );
 };
 
-const renderClaim = (claim) =>
+const getSteps = (claim, access) => {
+    const steps = [
+        {
+            icon: Circle,
+            title: 'Kulukorvaus luotu',
+            datetime: formatDateTime(claim.created),
+            comment: claim.modified ? `Muokattu ${formatDateTime(claim.modified)}` : null,
+        },
+    ];
+
+    for (const event of claim.events) {
+        let icon = Circle;
+        let color = 'gray';
+        let title = '';
+
+        switch (event.status) {
+            case 'approved':
+                icon = CheckCircle;
+                color = 'green';
+                title = 'Hyväksytty';
+                break;
+            case 'rejected':
+                icon = AlertCircle;
+                color = 'red';
+                title = 'Hylätty';
+                break;
+            case 'paid':
+                icon = CheckCircle;
+                color = 'indigo';
+                title = 'Maksettu';
+                break;
+        }
+
+        steps.push({
+            icon,
+            color,
+            title,
+            datetime: formatDateTime(event.timestamp),
+            comment: event.comment,
+        });
+    }
+
+    if (steps.length > 1) {
+        steps[steps.length - 1].delete = <RevokeAction id={claim.id} />
+    }
+
+    if (steps.length === 1) {
+        if (access("admin") === "none") {
+            steps.push({
+                title: 'Odottaa hyväksyntää',
+                icon: Clock,
+            });
+        } else {
+            steps.push({
+                icon: ArrowRightCircle,
+                actions: <ApproveAction id={claim.id} />,
+            })
+        }
+    } else if (claim.events[claim.events.length - 1].status === 'approved') {
+        steps.push({
+            icon: ArrowRightCircle,
+            actions: <PaidAction id={claim.id} />,
+        })
+    }
+
+    return steps;
+};
+
+const renderClaim = (claim, access, revokeStatus) =>
     claim ? (
         <React.Fragment>
             <Flex align="baseline">
@@ -141,11 +218,16 @@ const renderClaim = (claim) =>
                 <Text color="gray.400" mx={3}>
                     &bull;
                 </Text>
-                <StatusBadge status={claim.status} />
+                <Badge
+                    rounded="md"
+                    as={Flex}
+                    py={1}
+                    px={2}
+                    variantColor={statusColors[claim.status]}
+                >
+                    {statuses[claim.status]}
+                </Badge>
                 <Box flexGrow={1} />
-                <Button variantColor="indigo" variant="ghost">
-                    <MessageSquare size="1.2em" />
-                </Button>
                 <Button
                     flexShrink={0}
                     variant="ghost"
@@ -164,6 +246,7 @@ const renderClaim = (claim) =>
                     variantColor="indigo"
                     as={RouterLink}
                     to={`/costClaims/${claim.id}/edit`}
+                    display={access("admin", ['rejected', 'created'].includes(claim.status)) || 'inline-flex'}
                 >
                     <Edit size="1.2em" />
                 </Button>
@@ -173,65 +256,61 @@ const renderClaim = (claim) =>
                         ml={4}
                         variant="ghost"
                         variantColor="red"
+                        display={access("admin") || 'inline-flex'}
                     >
                         <Trash2 size="1.2em" />
                     </Button>
                 </CostClaimDelete>
             </Flex>
-            <DL>
-                <DT>Summa</DT>
-                <DD>{formatCurrency(claim.total)}</DD>
-                <DT>Tekijä</DT>
-                <DD>
-                    <Link
-                        as={RouterLink}
-                        to={`/users/${claim.author.id}`}
-                        color="indigo.700"
-                    >
-                        {claim.author.name}
-                    </Link>
-                </DD>
-                {claim.approvedBy ? (
-                    <React.Fragment>
-                        <DT>Hyväksyjä</DT>
-                        <DD>
-                            <Link
-                                as={RouterLink}
-                                color="indigo.700"
-                                to={`/users/${claim.approvedBy.id}`}
-                            >
-                                {claim.approvedBy.name}
-                            </Link>
-                        </DD>
-                    </React.Fragment>
-                ) : null}
-                <DT>Kustannuspaikka</DT>
-                <DD>
-                    <Link
-                        as={RouterLink}
-                        to={`/costPools/${claim.costPool.id}`}
-                        color="indigo.700"
-                    >
-                        {claim.costPool.name}
-                    </Link>
-                </DD>
-                <DT>Rahan lähde</DT>
-                <DD>{sourcesOfMoney[claim.sourceOfMoney]}</DD>
-                <DT>Luotu</DT>
-                <DD>{formatDateTime(claim.created)}</DD>
-                {claim.modified ? (
-                    <React.Fragment>
-                        <DT>Muokattu</DT>
-                        <DD>{formatDateTime(claim.modified)}</DD>
-                    </React.Fragment>
-                ) : null}
-                {claim.details ? (
-                    <React.Fragment>
-                        <DT>Lisätiedot</DT>
-                        <DD>{claim.details}</DD>
-                    </React.Fragment>
-                ) : null}
-            </DL>
+            <Flex justify="space-between">
+                <DL mt={3}>
+                    <DT>Summa</DT>
+                    <DD>{formatCurrency(claim.total)}</DD>
+                    <DT>Tekijä</DT>
+                    <DD>
+                        <Link
+                            as={RouterLink}
+                            to={`/users/${claim.author.id}`}
+                            color="indigo.700"
+                        >
+                            {claim.author.name}
+                        </Link>
+                    </DD>
+                    {claim.approvedBy ? (
+                        <React.Fragment>
+                            <DT>Hyväksyjä</DT>
+                            <DD>
+                                <Link
+                                    as={RouterLink}
+                                    color="indigo.700"
+                                    to={`/users/${claim.approvedBy.id}`}
+                                >
+                                    {claim.approvedBy.name}
+                                </Link>
+                            </DD>
+                        </React.Fragment>
+                    ) : null}
+                    <DT>Kustannuspaikka</DT>
+                    <DD>
+                        <Link
+                            as={RouterLink}
+                            to={`/costPools/${claim.costPool.id}`}
+                            color="indigo.700"
+                        >
+                            {claim.costPool.name}
+                        </Link>
+                    </DD>
+                    <DT>Rahan lähde</DT>
+                    <DD>{sourcesOfMoney[claim.sourceOfMoney]}</DD>
+                    {claim.details ? (
+                        <React.Fragment>
+                            <DT>Lisätiedot</DT>
+                            <DD>{claim.details}</DD>
+                        </React.Fragment>
+                    ) : null}
+                </DL>
+                <TimeLine steps={getSteps(claim, access)} />
+            </Flex>
             <Divider my={6} />
             <Heading as="h3" size="md" mb={6}>
                 Kuitit
@@ -288,6 +367,7 @@ const CostClaim = (props) => {
     const id = props.match.params.id;
 
     const [result] = useQuery({ query, variables: { id } });
+    const access = useAccess();
 
     return (
         <Box maxWidth="800px" margin="auto">
@@ -305,7 +385,7 @@ const CostClaim = (props) => {
                 <Spinner color="indigo.500" display="block" />
             ) : null}
             <ErrorDisplay error={result.error} />
-            {result.data ? renderClaim(result.data.costClaim) : null}
+            {result.data ? renderClaim(result.data.costClaim, access) : null}
         </Box>
     );
 };

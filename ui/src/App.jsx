@@ -42,6 +42,7 @@ const query = `
         user {
             id
             name
+            role
         }
         systemInfo {
             serverVersion

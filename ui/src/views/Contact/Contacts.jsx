@@ -5,17 +5,12 @@ import {
     Button,
     Modal,
     useDisclosure,
-    ModalHeader,
-    ModalContent,
-    ModalBody,
-    ModalOverlay,
     Flex,
     Input,
     Link,
     IconButton,
 } from "@chakra-ui/core";
-import { useQuery, useMutation } from "urql";
-import ContactForm from "../../forms/ContactForm";
+import { useQuery } from "urql";
 import ErrorDisplay from "../../components/ErrorDisplay";
 import {
     TableContainer,
@@ -31,12 +26,13 @@ import { Link as RouterLink } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import Empty from "../../components/Empty";
 import NewContact from "./NewContact";
+import { useSortable } from "../../util/hooks";
 
 const limit = 20;
 
 const query = `
-    query FetchContacts($offset: Int! = 0, $searchTerm: String) {
-        contacts(offset: $offset, limit: ${limit}, searchTerm: $searchTerm){
+    query FetchContacts($offset: Int! = 0, $searchTerm: String, $sortOptions: SortOptions) {
+        contacts(offset: $offset, limit: ${limit}, searchTerm: $searchTerm, sortOptions: $sortOptions){
             nodes {
                 id
                 name
@@ -50,9 +46,10 @@ const query = `
 const Contacts = (props) => {
     const [offset, setOffset] = useState(0);
     const [searchTerm, setSearchTerm] = useState();
+    const [sortOptions, sortable] = useSortable({ key: 'name', order: 'asc' });
     const [result] = useQuery({
         query,
-        variables: { offset, searchTerm },
+        variables: { offset, searchTerm, sortOptions },
     });
     const { register, handleSubmit } = useForm();
     const { isOpen, onOpen, onClose } = useDisclosure();
@@ -101,8 +98,8 @@ const Contacts = (props) => {
                 <Table>
                     <THead>
                         <TR>
-                            <TH textAlign="left">Nimi</TH>
-                            <TH textAlign="right">Osoite</TH>
+                            <TH {...sortable('name')} textAlign="left">Nimi</TH>
+                            <TH {...sortable('address')} textAlign="right">Osoite</TH>
                         </TR>
                     </THead>
                     <TBody>

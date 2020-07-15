@@ -1,2 +1,4 @@
 findecs*
 upload/
+ui/.parcel-cache/
+env.local

@@ -27,12 +27,14 @@ import ErrorDisplay from "../../components/ErrorDisplay";
 import Empty from "../../components/Empty";
 import Pagination from "../../components/Pagination";
 import ViewOptions from "../../components/ViewOptions";
+import { useSortable } from "../../util/hooks";
+import CostClaimsList from "../../components/CostClaimsList";
 
 const limit = 15;
 
 const query = `
-    query FetchCostClaims($offset: Int! = 0, $viewOptions: ViewOptions) {
-        costClaims(offset: $offset, limit: ${limit}, viewOptions: $viewOptions) {
+    query FetchCostClaims($offset: Int! = 0, $viewOptions: ViewOptions, $sortOptions: SortOptions) {
+        costClaims(offset: $offset, limit: ${limit}, viewOptions: $viewOptions, sortOptions: $sortOptions) {
             nodes {
                 id
                 description
@@ -159,7 +161,8 @@ const ClaimRow = ({ claim }) => {
 const CostClaims = (props) => {
     const [offset, setOffset] = useState(0);
     const [viewOptions, setViewOptions] = useState(null);
-    const [result] = useQuery({ query, variables: { offset, viewOptions } });
+    const [sortOptions, sortable] = useSortable({ key: 'created', order: 'desc' })
+    const [result] = useQuery({ query, variables: { offset, viewOptions, sortOptions } });
 
     const { fetching, error, data } = result;
     const claims = data ? data.costClaims.nodes : [];
@@ -180,28 +183,7 @@ const CostClaims = (props) => {
             </Flex>
             <ErrorDisplay error={error} />
             <TableContainer>
-                <Table>
-                    <THead>
-                        <TR>
-                            <TH textAlign="left">Kuvaus</TH>
-                            <TH
-                                display={["none", "table-cell"]}
-                                textAlign="left"
-                            >
-                                Tekijä
-                            </TH>
-                            <TH textAlign="center">Luotu</TH>
-                            <TH textAlign="right">Summa</TH>
-                            <TH textAlign="right">Tila</TH>
-                            <TH display={["none", "table-cell"]}></TH>
-                        </TR>
-                    </THead>
-                    <TBody>
-                        {claims.map((claim) => (
-                            <ClaimRow key={claim.id} claim={claim} />
-                        ))}
-                    </TBody>
-                </Table>
+                <CostClaimsList claims={claims} sortable={sortable} />
                 <Empty visible={!claims.length} />
                 <Pagination
                     offset={offset}

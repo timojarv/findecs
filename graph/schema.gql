@@ -17,6 +17,11 @@ enum UserRole {
     root
 }
 
+enum SortOrder {
+    asc
+    desc
+}
+
 scalar Date
 scalar DateTime
 scalar Upload
@@ -29,6 +34,11 @@ type SystemInfo {
 input ViewOptions {
     author: String!
     status: String!
+}
+
+input SortOptions {
+    key: String!
+    order: SortOrder! = asc
 }
 
 type User {
@@ -97,6 +107,14 @@ type CostPoolsConnection {
     totalCount: Int!
 }
 
+type Event {
+    id: ID!
+    status: Status!
+    timestamp: DateTime!
+    comment: String
+    author: User!
+}
+
 type CostClaim {
     id: ID!
     runningNumber: Int!
@@ -112,6 +130,7 @@ type CostClaim {
     otherIban: String
     receipts: [Receipt!]!
     total: Float!
+    events: [Event!]!
 }
 
 input CostClaimInput {
@@ -232,19 +251,21 @@ type Query {
         limit: Int = 20
         offset: Int! = 0
         viewOptions: ViewOptions
+        sortOptions: SortOptions
     ): CostClaimsConnection!
     costClaim(id: ID!): CostClaim
 
     user(id: ID): User!
-    users(limit: Int = 20, offset: Int! = 0): [User!]!
+    users(limit: Int = 20, offset: Int! = 0, sortOptions: SortOptions): [User!]!
 
-    costPools(limit: Int = 20, offset: Int! = 0): CostPoolsConnection!
+    costPools(limit: Int = 20, offset: Int! = 0, sortOptions: SortOptions): CostPoolsConnection!
     costPool(id: ID!): CostPool!
 
     contacts(
         limit: Int = 20
         offset: Int! = 0
         searchTerm: String
+        sortOptions: SortOptions
     ): ContactsConnection!
     contact(id: ID!): Contact!
 
@@ -252,6 +273,7 @@ type Query {
         limit: Int = 20
         offset: Int! = 0
         viewOptions: ViewOptions
+        sortOptions: SortOptions
     ): PurchaseInvoicesConnection!
     purchaseInvoice(id: ID!): PurchaseInvoice!
 
@@ -259,10 +281,13 @@ type Query {
         limit: Int = 20
         offset: Int! = 0
         viewOptions: ViewOptions
+        sortOptions: SortOptions
     ): SalesInvoicesConnection!
     salesInvoice(id: ID!): SalesInvoice!
 
     systemInfo: SystemInfo!
+
+    accessPolicy: String!
 }
 
 type Mutation {
@@ -273,6 +298,8 @@ type Mutation {
     login(email: String!, password: String!): User!
     updateSettings(settings: SettingsInput!): User!
     logout: Boolean!
+    requestPasswordReset(email: String!): String!
+    resetPassword(token: String!, newPassword: String!): String!
 
     createCostPool(costPool: CostPoolInput!): CostPool!
     updateCostPool(id: ID!, costPool: CostPoolInput!): CostPool!
@@ -288,7 +315,8 @@ type Mutation {
         receipts: [ReceiptInput!]!
     ): CostClaim!
     deleteCostClaim(id: ID!): ID!
-    setCostClaimStatus(id: ID!, status: Status!): CostClaim!
+    setCostClaimStatus(id: ID!, status: Status!, comment: String): CostClaim!
+    revokeCostClaimStatus(id: ID!): CostClaim!
 
     createContact(contact: ContactInput!): Contact!
     updateContact(id: ID!, contact: ContactInput!): Contact!

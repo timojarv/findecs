@@ -92,6 +92,8 @@ const deleteMutation = `
     }
 `;
 
+const identity = value => !!value;
+
 const CostPoolDelete = (props) => {
     const { children, id } = props;
 
@@ -211,7 +213,7 @@ const CostPoolView = (props) => {
                 <DD>{formatCurrency(costPool.budget - costPool.total)}</DD>
             </DL>
 
-            {costPool.costClaims.length > 0 ? (
+            {costPool.costClaims.filter(identity).length > 0 ? (
                 <React.Fragment>
                     <Divider my={8} />
                     <Heading mb={6} as="h3" size="lg">
@@ -223,7 +225,7 @@ const CostPoolView = (props) => {
                 </React.Fragment>
             ) : null}
 
-            {costPool.purchaseInvoices.length > 0 ? (
+            {costPool.purchaseInvoices.filter(identity).length > 0 ? (
                 <React.Fragment>
                     <Divider my={8} />
                     <Heading my={4} as="h3" size="lg">
@@ -237,7 +239,7 @@ const CostPoolView = (props) => {
                 </React.Fragment>
             ) : null}
 
-            {costPool.salesInvoices.length > 0 ? (
+            {costPool.salesInvoices.filter(identity).length > 0 ? (
                 <React.Fragment>
                     <Divider my={8} />
                     <Heading my={4} as="h3" size="lg">

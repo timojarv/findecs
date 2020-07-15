@@ -1,11 +1,11 @@
-import React, { useState } from "react";
-import { PseudoBox, Text, Box, Code } from "@chakra-ui/core";
+import React from "react";
+import { PseudoBox } from "@chakra-ui/core";
 import { Upload } from "react-feather";
 import { useDropzone } from "react-dropzone";
 
 const FileInput = ({ onChange, isDisabled, accept, ...props }) => {
     const { getRootProps, getInputProps } = useDropzone({
-        onDropApproved: onChange,
+        onDropAccepted: onChange,
         disabled: isDisabled,
         accept: accept,
     });

@@ -25,6 +25,7 @@ import { formatDateTime, formatCurrency, formatDate } from "../../util/format";
 import { useQuery, useMutation } from "urql";
 import ErrorDisplay from "../../components/ErrorDisplay";
 import { useMessage } from "../../util/message";
+import { useAccess } from "../../util/hooks";
 
 const query = `
     query FetchSalesInvoice ($id: ID!) {
@@ -121,7 +122,7 @@ const SalesInvoiceDelete = (props) => {
     );
 };
 
-const Invoice = ({ invoice }) => {
+const Invoice = ({ invoice, access }) => {
     return (
         <React.Fragment>
             <Flex align="baseline">
@@ -167,6 +168,7 @@ const Invoice = ({ invoice }) => {
                     size="sm"
                     as={RouterLink}
                     to={`/salesInvoices/${invoice.id}/edit`}
+                    display={access("admin", invoice.status != 'paid') || 'inline-flex'}
                 >
                     <Text display={["none", "inline-block"]} mr={2}>
                         Muokkaa
@@ -180,6 +182,7 @@ const Invoice = ({ invoice }) => {
                         variant="outline"
                         variantColor="red"
                         size="sm"
+                        display={access("admin", invoice.status != 'paid') || 'inline-flex'}
                     >
                         <Text display={["none", "inline-block"]} mr={2}>
                             Poista
@@ -336,6 +339,7 @@ const SalesInvoice = (props) => {
     const id = props.match.params.id;
 
     const [result] = useQuery({ query, variables: { id } });
+    const access = useAccess();
 
     const { fetching, error, data } = result;
 
@@ -353,7 +357,7 @@ const SalesInvoice = (props) => {
             </Button>
             {fetching ? <Spinner color="indigo.500" display="block" /> : null}
             <ErrorDisplay error={error} />
-            {data ? <Invoice invoice={data.salesInvoice} /> : null}
+            {data ? <Invoice access={access} invoice={data.salesInvoice} /> : null}
         </Box>
     );
 };

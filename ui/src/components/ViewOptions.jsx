@@ -7,8 +7,10 @@ import {
     MenuOptionGroup,
     MenuItemOption,
     MenuDivider,
+    Flex,
 } from "@chakra-ui/core";
 import { useHistory, useLocation } from "react-router-dom";
+import { useAccess } from "../util/hooks";
 
 const statuses = {
     all: "Kaikki",
@@ -23,6 +25,7 @@ const ViewOptions = (props) => {
 
     const history = useHistory();
     const location = useLocation();
+    const access = useAccess()
     const params = new URLSearchParams(location.search);
     const [author, setAuthor] = useState(params.get("author") || "all");
     const [status, setStatus] = useState(params.get("status") || "all");
@@ -40,37 +43,43 @@ const ViewOptions = (props) => {
     }, [author, status, onChange]);
 
     return (
-        <Menu closeOnSelect={false}>
-            <MenuButton as={Button} rightIcon="chevron-down">
-                Näkymä
-            </MenuButton>
-            <MenuList>
-                <MenuOptionGroup
-                    title="Näytä"
-                    type="radio"
-                    value={author}
-                    onChange={setAuthor}
-                >
-                    <MenuItemOption value="all">Kaikki</MenuItemOption>
-                    <MenuItemOption value="self">Vain omat</MenuItemOption>
-                </MenuOptionGroup>
-                <MenuDivider />
-                <MenuOptionGroup
-                    title="Tila"
-                    type="radio"
-                    value={status}
-                    onChange={setStatus}
-                >
-                    {Object.keys(statuses)
-                        .filter((s) => !disabledStatuses.includes(s))
-                        .map((s, i) => (
-                            <MenuItemOption key={i} value={s}>
-                                {statuses[s]}
-                            </MenuItemOption>
-                        ))}
-                </MenuOptionGroup>
-            </MenuList>
-        </Menu>
+        <Flex>
+            <Menu closeOnSelect={false}>
+                <MenuButton mr={4} as={Button} rightIcon="chevron-down" display={access("admin")}>
+                    Tekijä
+                </MenuButton>
+                <MenuList>
+                    <MenuOptionGroup
+                        type="radio"
+                        value={author}
+                        onChange={setAuthor}
+                    >
+                        <MenuItemOption value="all">Kaikki</MenuItemOption>
+                        <MenuItemOption value="self">Vain omat</MenuItemOption>
+                    </MenuOptionGroup>
+                </MenuList>
+            </Menu>
+            <Menu closeOnSelect={false}>
+                <MenuButton as={Button} rightIcon="chevron-down">
+                    Tila
+                </MenuButton>
+                <MenuList>
+                    <MenuOptionGroup
+                        type="radio"
+                        value={status}
+                        onChange={setStatus}
+                    >
+                        {Object.keys(statuses)
+                            .filter((s) => !disabledStatuses.includes(s))
+                            .map((s, i) => (
+                                <MenuItemOption key={i} value={s}>
+                                    {statuses[s]}
+                                </MenuItemOption>
+                            ))}
+                    </MenuOptionGroup>
+                </MenuList>
+            </Menu>
+        </Flex>
     );
 };
 

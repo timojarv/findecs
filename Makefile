@@ -1,6 +1,6 @@
 .PHONY: default
 default:
-	go run .
+	go run . --debug
 
 .PHONY: build
 build:

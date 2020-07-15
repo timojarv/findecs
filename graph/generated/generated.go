@@ -38,6 +38,7 @@ type ResolverRoot interface {
 	Contact() ContactResolver
 	CostClaim() CostClaimResolver
 	CostPool() CostPoolResolver
+	Event() EventResolver
 	Mutation() MutationResolver
 	PurchaseInvoice() PurchaseInvoiceResolver
 	PurchaseInvoiceRow() PurchaseInvoiceRowResolver
@@ -71,6 +72,7 @@ type ComplexityRoot struct {
 		Created       func(childComplexity int) int
 		Description   func(childComplexity int) int
 		Details       func(childComplexity int) int
+		Events        func(childComplexity int) int
 		ID            func(childComplexity int) int
 		Modified      func(childComplexity int) int
 		OtherIBAN     func(childComplexity int) int
@@ -101,6 +103,14 @@ type ComplexityRoot struct {
 		TotalCount func(childComplexity int) int
 	}
 
+	Event struct {
+		Author    func(childComplexity int) int
+		Comment   func(childComplexity int) int
+		ID        func(childComplexity int) int
+		Status    func(childComplexity int) int
+		Timestamp func(childComplexity int) int
+	}
+
 	Mutation struct {
 		CreateContact         func(childComplexity int, contact model.ContactInput) int
 		CreateCostClaim       func(childComplexity int, costClaim model.CostClaimInput, receipts []*model.ReceiptInput) int
@@ -116,7 +126,10 @@ type ComplexityRoot struct {
 		DeleteUser            func(childComplexity int, id string) int
 		Login                 func(childComplexity int, email string, password string) int
 		Logout                func(childComplexity int) int
-		SetCostClaimStatus    func(childComplexity int, id string, status model.Status) int
+		RequestPasswordReset  func(childComplexity int, email string) int
+		ResetPassword         func(childComplexity int, token string, newPassword string) int
+		RevokeCostClaimStatus func(childComplexity int, id string) int
+		SetCostClaimStatus    func(childComplexity int, id string, status model.Status, comment *string) int
 		UpdateContact         func(childComplexity int, id string, contact model.ContactInput) int
 		UpdateCostClaim       func(childComplexity int, id string, costClaim model.CostClaimInput, receipts []*model.ReceiptInput) int
 		UpdateCostPool        func(childComplexity int, id string, costPool model.CostPoolInput) int
@@ -156,19 +169,20 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		AccessPolicy     func(childComplexity int) int
 		Contact          func(childComplexity int, id string) int
-		Contacts         func(childComplexity int, limit *int, offset int, searchTerm *string) int
+		Contacts         func(childComplexity int, limit *int, offset int, searchTerm *string, sortOptions *model.SortOptions) int
 		CostClaim        func(childComplexity int, id string) int
-		CostClaims       func(childComplexity int, limit *int, offset int, viewOptions *model.ViewOptions) int
+		CostClaims       func(childComplexity int, limit *int, offset int, viewOptions *model.ViewOptions, sortOptions *model.SortOptions) int
 		CostPool         func(childComplexity int, id string) int
-		CostPools        func(childComplexity int, limit *int, offset int) int
+		CostPools        func(childComplexity int, limit *int, offset int, sortOptions *model.SortOptions) int
 		PurchaseInvoice  func(childComplexity int, id string) int
-		PurchaseInvoices func(childComplexity int, limit *int, offset int, viewOptions *model.ViewOptions) int
+		PurchaseInvoices func(childComplexity int, limit *int, offset int, viewOptions *model.ViewOptions, sortOptions *model.SortOptions) int
 		SalesInvoice     func(childComplexity int, id string) int
-		SalesInvoices    func(childComplexity int, limit *int, offset int, viewOptions *model.ViewOptions) int
+		SalesInvoices    func(childComplexity int, limit *int, offset int, viewOptions *model.ViewOptions, sortOptions *model.SortOptions) int
 		SystemInfo       func(childComplexity int) int
 		User             func(childComplexity int, id *string) int
-		Users            func(childComplexity int, limit *int, offset int) int
+		Users            func(childComplexity int, limit *int, offset int, sortOptions *model.SortOptions) int
 	}
 
 	Receipt struct {
@@ -236,17 +250,22 @@ type ContactResolver interface {
 type CostClaimResolver interface {
 	Author(ctx context.Context, obj *model.CostClaim) (*model.User, error)
 	CostPool(ctx context.Context, obj *model.CostClaim) (*model.CostPool, error)
+	Status(ctx context.Context, obj *model.CostClaim) (model.Status, error)
 
 	ApprovedBy(ctx context.Context, obj *model.CostClaim) (*model.User, error)
 
 	Receipts(ctx context.Context, obj *model.CostClaim) ([]*model.Receipt, error)
-	Total(ctx context.Context, obj *model.CostClaim) (float64, error)
+
+	Events(ctx context.Context, obj *model.CostClaim) ([]*model.Event, error)
 }
 type CostPoolResolver interface {
 	Total(ctx context.Context, obj *model.CostPool) (float64, error)
 	CostClaims(ctx context.Context, obj *model.CostPool) ([]*model.CostClaim, error)
 	SalesInvoices(ctx context.Context, obj *model.CostPool) ([]*model.SalesInvoice, error)
 	PurchaseInvoices(ctx context.Context, obj *model.CostPool) ([]*model.PurchaseInvoice, error)
+}
+type EventResolver interface {
+	Author(ctx context.Context, obj *model.Event) (*model.User, error)
 }
 type MutationResolver interface {
 	CreateUser(ctx context.Context, user model.UserInput) (*model.User, error)
@@ -255,13 +274,16 @@ type MutationResolver interface {
 	Login(ctx context.Context, email string, password string) (*model.User, error)
 	UpdateSettings(ctx context.Context, settings model.SettingsInput) (*model.User, error)
 	Logout(ctx context.Context) (bool, error)
+	RequestPasswordReset(ctx context.Context, email string) (string, error)
+	ResetPassword(ctx context.Context, token string, newPassword string) (string, error)
 	CreateCostPool(ctx context.Context, costPool model.CostPoolInput) (*model.CostPool, error)
 	UpdateCostPool(ctx context.Context, id string, costPool model.CostPoolInput) (*model.CostPool, error)
 	DeleteCostPool(ctx context.Context, id string) (string, error)
 	CreateCostClaim(ctx context.Context, costClaim model.CostClaimInput, receipts []*model.ReceiptInput) (*model.CostClaim, error)
 	UpdateCostClaim(ctx context.Context, id string, costClaim model.CostClaimInput, receipts []*model.ReceiptInput) (*model.CostClaim, error)
 	DeleteCostClaim(ctx context.Context, id string) (string, error)
-	SetCostClaimStatus(ctx context.Context, id string, status model.Status) (*model.CostClaim, error)
+	SetCostClaimStatus(ctx context.Context, id string, status model.Status, comment *string) (*model.CostClaim, error)
+	RevokeCostClaimStatus(ctx context.Context, id string) (*model.CostClaim, error)
 	CreateContact(ctx context.Context, contact model.ContactInput) (*model.Contact, error)
 	UpdateContact(ctx context.Context, id string, contact model.ContactInput) (*model.Contact, error)
 	DeleteContact(ctx context.Context, id string) (string, error)
@@ -279,26 +301,26 @@ type PurchaseInvoiceResolver interface {
 	ApprovedBy(ctx context.Context, obj *model.PurchaseInvoice) (*model.User, error)
 
 	Rows(ctx context.Context, obj *model.PurchaseInvoice) ([]*model.PurchaseInvoiceRow, error)
-	Total(ctx context.Context, obj *model.PurchaseInvoice) (float64, error)
 }
 type PurchaseInvoiceRowResolver interface {
 	Invoice(ctx context.Context, obj *model.PurchaseInvoiceRow) (*model.PurchaseInvoice, error)
 	CostPool(ctx context.Context, obj *model.PurchaseInvoiceRow) (*model.CostPool, error)
 }
 type QueryResolver interface {
-	CostClaims(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions) (*model.CostClaimsConnection, error)
+	CostClaims(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions, sortOptions *model.SortOptions) (*model.CostClaimsConnection, error)
 	CostClaim(ctx context.Context, id string) (*model.CostClaim, error)
 	User(ctx context.Context, id *string) (*model.User, error)
-	Users(ctx context.Context, limit *int, offset int) ([]*model.User, error)
-	CostPools(ctx context.Context, limit *int, offset int) (*model.CostPoolsConnection, error)
+	Users(ctx context.Context, limit *int, offset int, sortOptions *model.SortOptions) ([]*model.User, error)
+	CostPools(ctx context.Context, limit *int, offset int, sortOptions *model.SortOptions) (*model.CostPoolsConnection, error)
 	CostPool(ctx context.Context, id string) (*model.CostPool, error)
-	Contacts(ctx context.Context, limit *int, offset int, searchTerm *string) (*model.ContactsConnection, error)
+	Contacts(ctx context.Context, limit *int, offset int, searchTerm *string, sortOptions *model.SortOptions) (*model.ContactsConnection, error)
 	Contact(ctx context.Context, id string) (*model.Contact, error)
-	PurchaseInvoices(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions) (*model.PurchaseInvoicesConnection, error)
+	PurchaseInvoices(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions, sortOptions *model.SortOptions) (*model.PurchaseInvoicesConnection, error)
 	PurchaseInvoice(ctx context.Context, id string) (*model.PurchaseInvoice, error)
-	SalesInvoices(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions) (*model.SalesInvoicesConnection, error)
+	SalesInvoices(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions, sortOptions *model.SortOptions) (*model.SalesInvoicesConnection, error)
 	SalesInvoice(ctx context.Context, id string) (*model.SalesInvoice, error)
 	SystemInfo(ctx context.Context) (*model.SystemInfo, error)
+	AccessPolicy(ctx context.Context) (string, error)
 }
 type SalesInvoiceResolver interface {
 	Author(ctx context.Context, obj *model.SalesInvoice) (*model.User, error)
@@ -306,7 +328,6 @@ type SalesInvoiceResolver interface {
 	Recipient(ctx context.Context, obj *model.SalesInvoice) (*model.Contact, error)
 
 	Rows(ctx context.Context, obj *model.SalesInvoice) ([]*model.SalesInvoiceRow, error)
-	Total(ctx context.Context, obj *model.SalesInvoice) (float64, error)
 }
 type SalesInvoiceRowResolver interface {
 	Invoice(ctx context.Context, obj *model.SalesInvoiceRow) (*model.SalesInvoice, error)
@@ -425,6 +446,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.CostClaim.Details(childComplexity), true
+
+	case "CostClaim.events":
+		if e.complexity.CostClaim.Events == nil {
+			break
+		}
+
+		return e.complexity.CostClaim.Events(childComplexity), true
 
 	case "CostClaim.id":
 		if e.complexity.CostClaim.ID == nil {
@@ -558,6 +586,41 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.CostPoolsConnection.TotalCount(childComplexity), true
+
+	case "Event.author":
+		if e.complexity.Event.Author == nil {
+			break
+		}
+
+		return e.complexity.Event.Author(childComplexity), true
+
+	case "Event.comment":
+		if e.complexity.Event.Comment == nil {
+			break
+		}
+
+		return e.complexity.Event.Comment(childComplexity), true
+
+	case "Event.id":
+		if e.complexity.Event.ID == nil {
+			break
+		}
+
+		return e.complexity.Event.ID(childComplexity), true
+
+	case "Event.status":
+		if e.complexity.Event.Status == nil {
+			break
+		}
+
+		return e.complexity.Event.Status(childComplexity), true
+
+	case "Event.timestamp":
+		if e.complexity.Event.Timestamp == nil {
+			break
+		}
+
+		return e.complexity.Event.Timestamp(childComplexity), true
 
 	case "Mutation.createContact":
 		if e.complexity.Mutation.CreateContact == nil {
@@ -722,6 +785,42 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.Logout(childComplexity), true
 
+	case "Mutation.requestPasswordReset":
+		if e.complexity.Mutation.RequestPasswordReset == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_requestPasswordReset_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.RequestPasswordReset(childComplexity, args["email"].(string)), true
+
+	case "Mutation.resetPassword":
+		if e.complexity.Mutation.ResetPassword == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_resetPassword_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.ResetPassword(childComplexity, args["token"].(string), args["newPassword"].(string)), true
+
+	case "Mutation.revokeCostClaimStatus":
+		if e.complexity.Mutation.RevokeCostClaimStatus == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_revokeCostClaimStatus_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.RevokeCostClaimStatus(childComplexity, args["id"].(string)), true
+
 	case "Mutation.setCostClaimStatus":
 		if e.complexity.Mutation.SetCostClaimStatus == nil {
 			break
@@ -732,7 +831,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.SetCostClaimStatus(childComplexity, args["id"].(string), args["status"].(model.Status)), true
+		return e.complexity.Mutation.SetCostClaimStatus(childComplexity, args["id"].(string), args["status"].(model.Status), args["comment"].(*string)), true
 
 	case "Mutation.updateContact":
 		if e.complexity.Mutation.UpdateContact == nil {
@@ -958,6 +1057,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.PurchaseInvoicesConnection.TotalCount(childComplexity), true
 
+	case "Query.accessPolicy":
+		if e.complexity.Query.AccessPolicy == nil {
+			break
+		}
+
+		return e.complexity.Query.AccessPolicy(childComplexity), true
+
 	case "Query.contact":
 		if e.complexity.Query.Contact == nil {
 			break
@@ -980,7 +1086,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.Contacts(childComplexity, args["limit"].(*int), args["offset"].(int), args["searchTerm"].(*string)), true
+		return e.complexity.Query.Contacts(childComplexity, args["limit"].(*int), args["offset"].(int), args["searchTerm"].(*string), args["sortOptions"].(*model.SortOptions)), true
 
 	case "Query.costClaim":
 		if e.complexity.Query.CostClaim == nil {
@@ -1004,7 +1110,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.CostClaims(childComplexity, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions)), true
+		return e.complexity.Query.CostClaims(childComplexity, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions), args["sortOptions"].(*model.SortOptions)), true
 
 	case "Query.costPool":
 		if e.complexity.Query.CostPool == nil {
@@ -1028,7 +1134,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.CostPools(childComplexity, args["limit"].(*int), args["offset"].(int)), true
+		return e.complexity.Query.CostPools(childComplexity, args["limit"].(*int), args["offset"].(int), args["sortOptions"].(*model.SortOptions)), true
 
 	case "Query.purchaseInvoice":
 		if e.complexity.Query.PurchaseInvoice == nil {
@@ -1052,7 +1158,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.PurchaseInvoices(childComplexity, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions)), true
+		return e.complexity.Query.PurchaseInvoices(childComplexity, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions), args["sortOptions"].(*model.SortOptions)), true
 
 	case "Query.salesInvoice":
 		if e.complexity.Query.SalesInvoice == nil {
@@ -1076,7 +1182,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.SalesInvoices(childComplexity, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions)), true
+		return e.complexity.Query.SalesInvoices(childComplexity, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions), args["sortOptions"].(*model.SortOptions)), true
 
 	case "Query.systemInfo":
 		if e.complexity.Query.SystemInfo == nil {
@@ -1107,7 +1213,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.Users(childComplexity, args["limit"].(*int), args["offset"].(int)), true
+		return e.complexity.Query.Users(childComplexity, args["limit"].(*int), args["offset"].(int), args["sortOptions"].(*model.SortOptions)), true
 
 	case "Receipt.amount":
 		if e.complexity.Receipt.Amount == nil {
@@ -1465,6 +1571,11 @@ enum UserRole {
     root
 }
 
+enum SortOrder {
+    asc
+    desc
+}
+
 scalar Date
 scalar DateTime
 scalar Upload
@@ -1477,6 +1588,11 @@ type SystemInfo {
 input ViewOptions {
     author: String!
     status: String!
+}
+
+input SortOptions {
+    key: String!
+    order: SortOrder! = asc
 }
 
 type User {
@@ -1545,6 +1661,14 @@ type CostPoolsConnection {
     totalCount: Int!
 }
 
+type Event {
+    id: ID!
+    status: Status!
+    timestamp: DateTime!
+    comment: String
+    author: User!
+}
+
 type CostClaim {
     id: ID!
     runningNumber: Int!
@@ -1560,6 +1684,7 @@ type CostClaim {
     otherIban: String
     receipts: [Receipt!]!
     total: Float!
+    events: [Event!]!
 }
 
 input CostClaimInput {
@@ -1680,19 +1805,21 @@ type Query {
         limit: Int = 20
         offset: Int! = 0
         viewOptions: ViewOptions
+        sortOptions: SortOptions
     ): CostClaimsConnection!
     costClaim(id: ID!): CostClaim
 
     user(id: ID): User!
-    users(limit: Int = 20, offset: Int! = 0): [User!]!
+    users(limit: Int = 20, offset: Int! = 0, sortOptions: SortOptions): [User!]!
 
-    costPools(limit: Int = 20, offset: Int! = 0): CostPoolsConnection!
+    costPools(limit: Int = 20, offset: Int! = 0, sortOptions: SortOptions): CostPoolsConnection!
     costPool(id: ID!): CostPool!
 
     contacts(
         limit: Int = 20
         offset: Int! = 0
         searchTerm: String
+        sortOptions: SortOptions
     ): ContactsConnection!
     contact(id: ID!): Contact!
 
@@ -1700,6 +1827,7 @@ type Query {
         limit: Int = 20
         offset: Int! = 0
         viewOptions: ViewOptions
+        sortOptions: SortOptions
     ): PurchaseInvoicesConnection!
     purchaseInvoice(id: ID!): PurchaseInvoice!
 
@@ -1707,10 +1835,13 @@ type Query {
         limit: Int = 20
         offset: Int! = 0
         viewOptions: ViewOptions
+        sortOptions: SortOptions
     ): SalesInvoicesConnection!
     salesInvoice(id: ID!): SalesInvoice!
 
     systemInfo: SystemInfo!
+
+    accessPolicy: String!
 }
 
 type Mutation {
@@ -1721,6 +1852,8 @@ type Mutation {
     login(email: String!, password: String!): User!
     updateSettings(settings: SettingsInput!): User!
     logout: Boolean!
+    requestPasswordReset(email: String!): String!
+    resetPassword(token: String!, newPassword: String!): String!
 
     createCostPool(costPool: CostPoolInput!): CostPool!
     updateCostPool(id: ID!, costPool: CostPoolInput!): CostPool!
@@ -1736,7 +1869,8 @@ type Mutation {
         receipts: [ReceiptInput!]!
     ): CostClaim!
     deleteCostClaim(id: ID!): ID!
-    setCostClaimStatus(id: ID!, status: Status!): CostClaim!
+    setCostClaimStatus(id: ID!, status: Status!, comment: String): CostClaim!
+    revokeCostClaimStatus(id: ID!): CostClaim!
 
     createContact(contact: ContactInput!): Contact!
     updateContact(id: ID!, contact: ContactInput!): Contact!
@@ -1986,6 +2120,56 @@ func (ec *executionContext) field_Mutation_login_args(ctx context.Context, rawAr
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_requestPasswordReset_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["email"]; ok {
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["email"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_resetPassword_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["token"]; ok {
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["token"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["newPassword"]; ok {
+		arg1, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["newPassword"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_revokeCostClaimStatus_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["id"]; ok {
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_setCostClaimStatus_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -2005,6 +2189,14 @@ func (ec *executionContext) field_Mutation_setCostClaimStatus_args(ctx context.C
 		}
 	}
 	args["status"] = arg1
+	var arg2 *string
+	if tmp, ok := rawArgs["comment"]; ok {
+		arg2, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["comment"] = arg2
 	return args, nil
 }
 
@@ -2233,6 +2425,14 @@ func (ec *executionContext) field_Query_contacts_args(ctx context.Context, rawAr
 		}
 	}
 	args["searchTerm"] = arg2
+	var arg3 *model.SortOptions
+	if tmp, ok := rawArgs["sortOptions"]; ok {
+		arg3, err = ec.unmarshalOSortOptions2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSortOptions(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["sortOptions"] = arg3
 	return args, nil
 }
 
@@ -2277,6 +2477,14 @@ func (ec *executionContext) field_Query_costClaims_args(ctx context.Context, raw
 		}
 	}
 	args["viewOptions"] = arg2
+	var arg3 *model.SortOptions
+	if tmp, ok := rawArgs["sortOptions"]; ok {
+		arg3, err = ec.unmarshalOSortOptions2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSortOptions(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["sortOptions"] = arg3
 	return args, nil
 }
 
@@ -2313,6 +2521,14 @@ func (ec *executionContext) field_Query_costPools_args(ctx context.Context, rawA
 		}
 	}
 	args["offset"] = arg1
+	var arg2 *model.SortOptions
+	if tmp, ok := rawArgs["sortOptions"]; ok {
+		arg2, err = ec.unmarshalOSortOptions2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSortOptions(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["sortOptions"] = arg2
 	return args, nil
 }
 
@@ -2357,6 +2573,14 @@ func (ec *executionContext) field_Query_purchaseInvoices_args(ctx context.Contex
 		}
 	}
 	args["viewOptions"] = arg2
+	var arg3 *model.SortOptions
+	if tmp, ok := rawArgs["sortOptions"]; ok {
+		arg3, err = ec.unmarshalOSortOptions2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSortOptions(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["sortOptions"] = arg3
 	return args, nil
 }
 
@@ -2401,6 +2625,14 @@ func (ec *executionContext) field_Query_salesInvoices_args(ctx context.Context, 
 		}
 	}
 	args["viewOptions"] = arg2
+	var arg3 *model.SortOptions
+	if tmp, ok := rawArgs["sortOptions"]; ok {
+		arg3, err = ec.unmarshalOSortOptions2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSortOptions(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["sortOptions"] = arg3
 	return args, nil
 }
 
@@ -2437,6 +2669,14 @@ func (ec *executionContext) field_Query_users_args(ctx context.Context, rawArgs 
 		}
 	}
 	args["offset"] = arg1
+	var arg2 *model.SortOptions
+	if tmp, ok := rawArgs["sortOptions"]; ok {
+		arg2, err = ec.unmarshalOSortOptions2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSortOptions(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["sortOptions"] = arg2
 	return args, nil
 }
 
@@ -2895,13 +3135,13 @@ func (ec *executionContext) _CostClaim_status(ctx context.Context, field graphql
 		Object:   "CostClaim",
 		Field:    field,
 		Args:     nil,
-		IsMethod: false,
+		IsMethod: true,
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Status, nil
+		return ec.resolvers.CostClaim().Status(rctx, obj)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -3155,13 +3395,13 @@ func (ec *executionContext) _CostClaim_total(ctx context.Context, field graphql.
 		Object:   "CostClaim",
 		Field:    field,
 		Args:     nil,
-		IsMethod: true,
+		IsMethod: false,
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.CostClaim().Total(rctx, obj)
+		return obj.Total, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -3176,6 +3416,40 @@ func (ec *executionContext) _CostClaim_total(ctx context.Context, field graphql.
 	res := resTmp.(float64)
 	fc.Result = res
 	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CostClaim_events(ctx context.Context, field graphql.CollectedField, obj *model.CostClaim) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "CostClaim",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.CostClaim().Events(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.Event)
+	fc.Result = res
+	return ec.marshalNEvent2ᚕᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐEventᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _CostClaimsConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *model.CostClaimsConnection) (ret graphql.Marshaler) {
@@ -3552,6 +3826,173 @@ func (ec *executionContext) _CostPoolsConnection_totalCount(ctx context.Context,
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _Event_id(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "Event",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Event_status(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "Event",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Status, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(model.Status)
+	fc.Result = res
+	return ec.marshalNStatus2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐStatus(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Event_timestamp(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "Event",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Timestamp, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNDateTime2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Event_comment(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "Event",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Comment, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Event_author(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "Event",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Event().Author(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.User)
+	fc.Result = res
+	return ec.marshalNUser2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐUser(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _Mutation_createUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -3789,6 +4230,88 @@ func (ec *executionContext) _Mutation_logout(ctx context.Context, field graphql.
 	res := resTmp.(bool)
 	fc.Result = res
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Mutation_requestPasswordReset(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "Mutation",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Mutation_requestPasswordReset_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().RequestPasswordReset(rctx, args["email"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Mutation_resetPassword(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "Mutation",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Mutation_resetPassword_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().ResetPassword(rctx, args["token"].(string), args["newPassword"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Mutation_createCostPool(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -4061,7 +4584,48 @@ func (ec *executionContext) _Mutation_setCostClaimStatus(ctx context.Context, fi
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().SetCostClaimStatus(rctx, args["id"].(string), args["status"].(model.Status))
+		return ec.resolvers.Mutation().SetCostClaimStatus(rctx, args["id"].(string), args["status"].(model.Status), args["comment"].(*string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.CostClaim)
+	fc.Result = res
+	return ec.marshalNCostClaim2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐCostClaim(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Mutation_revokeCostClaimStatus(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "Mutation",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Mutation_revokeCostClaimStatus_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().RevokeCostClaimStatus(rctx, args["id"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -4854,13 +5418,13 @@ func (ec *executionContext) _PurchaseInvoice_total(ctx context.Context, field gr
 		Object:   "PurchaseInvoice",
 		Field:    field,
 		Args:     nil,
-		IsMethod: true,
+		IsMethod: false,
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.PurchaseInvoice().Total(rctx, obj)
+		return obj.Total, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -5139,7 +5703,7 @@ func (ec *executionContext) _Query_costClaims(ctx context.Context, field graphql
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().CostClaims(rctx, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions))
+		return ec.resolvers.Query().CostClaims(rctx, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions), args["sortOptions"].(*model.SortOptions))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -5259,7 +5823,7 @@ func (ec *executionContext) _Query_users(ctx context.Context, field graphql.Coll
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Users(rctx, args["limit"].(*int), args["offset"].(int))
+		return ec.resolvers.Query().Users(rctx, args["limit"].(*int), args["offset"].(int), args["sortOptions"].(*model.SortOptions))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -5300,7 +5864,7 @@ func (ec *executionContext) _Query_costPools(ctx context.Context, field graphql.
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().CostPools(rctx, args["limit"].(*int), args["offset"].(int))
+		return ec.resolvers.Query().CostPools(rctx, args["limit"].(*int), args["offset"].(int), args["sortOptions"].(*model.SortOptions))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -5382,7 +5946,7 @@ func (ec *executionContext) _Query_contacts(ctx context.Context, field graphql.C
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Contacts(rctx, args["limit"].(*int), args["offset"].(int), args["searchTerm"].(*string))
+		return ec.resolvers.Query().Contacts(rctx, args["limit"].(*int), args["offset"].(int), args["searchTerm"].(*string), args["sortOptions"].(*model.SortOptions))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -5464,7 +6028,7 @@ func (ec *executionContext) _Query_purchaseInvoices(ctx context.Context, field g
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().PurchaseInvoices(rctx, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions))
+		return ec.resolvers.Query().PurchaseInvoices(rctx, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions), args["sortOptions"].(*model.SortOptions))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -5546,7 +6110,7 @@ func (ec *executionContext) _Query_salesInvoices(ctx context.Context, field grap
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().SalesInvoices(rctx, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions))
+		return ec.resolvers.Query().SalesInvoices(rctx, args["limit"].(*int), args["offset"].(int), args["viewOptions"].(*model.ViewOptions), args["sortOptions"].(*model.SortOptions))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -5636,6 +6200,40 @@ func (ec *executionContext) _Query_systemInfo(ctx context.Context, field graphql
 	res := resTmp.(*model.SystemInfo)
 	fc.Result = res
 	return ec.marshalNSystemInfo2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSystemInfo(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_accessPolicy(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "Query",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().AccessPolicy(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -6284,13 +6882,13 @@ func (ec *executionContext) _SalesInvoice_total(ctx context.Context, field graph
 		Object:   "SalesInvoice",
 		Field:    field,
 		Args:     nil,
-		IsMethod: true,
+		IsMethod: false,
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.SalesInvoice().Total(rctx, obj)
+		return obj.Total, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -8367,6 +8965,34 @@ func (ec *executionContext) unmarshalInputSettingsInput(ctx context.Context, obj
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputSortOptions(ctx context.Context, obj interface{}) (model.SortOptions, error) {
+	var it model.SortOptions
+	var asMap = obj.(map[string]interface{})
+
+	if _, present := asMap["order"]; !present {
+		asMap["order"] = "asc"
+	}
+
+	for k, v := range asMap {
+		switch k {
+		case "key":
+			var err error
+			it.Key, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "order":
+			var err error
+			it.Order, err = ec.unmarshalNSortOrder2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSortOrder(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputUserInput(ctx context.Context, obj interface{}) (model.UserInput, error) {
 	var it model.UserInput
 	var asMap = obj.(map[string]interface{})
@@ -8587,10 +9213,19 @@ func (ec *executionContext) _CostClaim(ctx context.Context, sel ast.SelectionSet
 				return res
 			})
 		case "status":
-			out.Values[i] = ec._CostClaim_status(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&invalids, 1)
-			}
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._CostClaim_status(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
 		case "details":
 			out.Values[i] = ec._CostClaim_details(ctx, field, obj)
 		case "created":
@@ -8633,6 +9268,11 @@ func (ec *executionContext) _CostClaim(ctx context.Context, sel ast.SelectionSet
 				return res
 			})
 		case "total":
+			out.Values[i] = ec._CostClaim_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&invalids, 1)
+			}
+		case "events":
 			field := field
 			out.Concurrently(i, func() (res graphql.Marshaler) {
 				defer func() {
@@ -8640,7 +9280,7 @@ func (ec *executionContext) _CostClaim(ctx context.Context, sel ast.SelectionSet
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._CostClaim_total(ctx, field, obj)
+				res = ec._CostClaim_events(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -8814,6 +9454,59 @@ func (ec *executionContext) _CostPoolsConnection(ctx context.Context, sel ast.Se
 	return out
 }
 
+var eventImplementors = []string{"Event"}
+
+func (ec *executionContext) _Event(ctx context.Context, sel ast.SelectionSet, obj *model.Event) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, eventImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Event")
+		case "id":
+			out.Values[i] = ec._Event_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&invalids, 1)
+			}
+		case "status":
+			out.Values[i] = ec._Event_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&invalids, 1)
+			}
+		case "timestamp":
+			out.Values[i] = ec._Event_timestamp(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&invalids, 1)
+			}
+		case "comment":
+			out.Values[i] = ec._Event_comment(ctx, field, obj)
+		case "author":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Event_author(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
 var mutationImplementors = []string{"Mutation"}
 
 func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -8859,6 +9552,16 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
+		case "requestPasswordReset":
+			out.Values[i] = ec._Mutation_requestPasswordReset(ctx, field)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "resetPassword":
+			out.Values[i] = ec._Mutation_resetPassword(ctx, field)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
 		case "createCostPool":
 			out.Values[i] = ec._Mutation_createCostPool(ctx, field)
 			if out.Values[i] == graphql.Null {
@@ -8891,6 +9594,11 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			}
 		case "setCostClaimStatus":
 			out.Values[i] = ec._Mutation_setCostClaimStatus(ctx, field)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "revokeCostClaimStatus":
+			out.Values[i] = ec._Mutation_revokeCostClaimStatus(ctx, field)
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
@@ -9046,19 +9754,10 @@ func (ec *executionContext) _PurchaseInvoice(ctx context.Context, sel ast.Select
 				return res
 			})
 		case "total":
-			field := field
-			out.Concurrently(i, func() (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._PurchaseInvoice_total(ctx, field, obj)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			})
+			out.Values[i] = ec._PurchaseInvoice_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&invalids, 1)
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -9361,6 +10060,20 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				}
 				return res
 			})
+		case "accessPolicy":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_accessPolicy(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
 		case "__type":
 			out.Values[i] = ec._Query___type(ctx, field)
 		case "__schema":
@@ -9519,19 +10232,10 @@ func (ec *executionContext) _SalesInvoice(ctx context.Context, sel ast.Selection
 				return res
 			})
 		case "total":
-			field := field
-			out.Concurrently(i, func() (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._SalesInvoice_total(ctx, field, obj)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			})
+			out.Values[i] = ec._SalesInvoice_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&invalids, 1)
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -10275,6 +10979,57 @@ func (ec *executionContext) marshalNDateTime2string(ctx context.Context, sel ast
 	return res
 }
 
+func (ec *executionContext) marshalNEvent2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐEvent(ctx context.Context, sel ast.SelectionSet, v model.Event) graphql.Marshaler {
+	return ec._Event(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNEvent2ᚕᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐEventᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Event) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNEvent2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐEvent(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+	return ret
+}
+
+func (ec *executionContext) marshalNEvent2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐEvent(ctx context.Context, sel ast.SelectionSet, v *model.Event) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._Event(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNFloat2float64(ctx context.Context, v interface{}) (float64, error) {
 	return graphql.UnmarshalFloat(v)
 }
@@ -10674,6 +11429,15 @@ func (ec *executionContext) marshalNSalesInvoicesConnection2ᚖgithubᚗcomᚋti
 
 func (ec *executionContext) unmarshalNSettingsInput2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSettingsInput(ctx context.Context, v interface{}) (model.SettingsInput, error) {
 	return ec.unmarshalInputSettingsInput(ctx, v)
+}
+
+func (ec *executionContext) unmarshalNSortOrder2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSortOrder(ctx context.Context, v interface{}) (model.SortOrder, error) {
+	var res model.SortOrder
+	return res, res.UnmarshalGQL(v)
+}
+
+func (ec *executionContext) marshalNSortOrder2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSortOrder(ctx context.Context, sel ast.SelectionSet, v model.SortOrder) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) unmarshalNSourceOfMoney2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSourceOfMoney(ctx context.Context, v interface{}) (model.SourceOfMoney, error) {
@@ -11113,6 +11877,18 @@ func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.Sele
 		return graphql.Null
 	}
 	return ec.marshalOInt2int(ctx, sel, *v)
+}
+
+func (ec *executionContext) unmarshalOSortOptions2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSortOptions(ctx context.Context, v interface{}) (model.SortOptions, error) {
+	return ec.unmarshalInputSortOptions(ctx, v)
+}
+
+func (ec *executionContext) unmarshalOSortOptions2ᚖgithubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSortOptions(ctx context.Context, v interface{}) (*model.SortOptions, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalOSortOptions2githubᚗcomᚋtimojarvᚋfindecsᚋgraphᚋmodelᚐSortOptions(ctx, v)
+	return &res, err
 }
 
 func (ec *executionContext) unmarshalOString2string(ctx context.Context, v interface{}) (string, error) {

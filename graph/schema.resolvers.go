@@ -5,6 +5,8 @@ package graph
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
+	"github.com/timojarv/findecs/access"
 	"github.com/timojarv/findecs/graph/generated"
 	"github.com/timojarv/findecs/graph/model"
 	"github.com/timojarv/findecs/session"
@@ -59,6 +62,23 @@ func (r *costClaimResolver) CostPool(ctx context.Context, obj *model.CostClaim) 
 	return &costPool, err
 }
 
+func (r *costClaimResolver) Status(ctx context.Context, obj *model.CostClaim) (model.Status, error) {
+	status := model.StatusCreated
+
+	err := r.DB.GetContext(ctx, &status, `
+		SELECT status FROM cost_claim_events
+		WHERE cost_claim = ?
+		ORDER BY timestamp DESC
+		LIMIT 1
+	`, obj.ID)
+
+	if err == sql.ErrNoRows {
+		err = nil
+	}
+
+	return status, err
+}
+
 func (r *costClaimResolver) ApprovedBy(ctx context.Context, obj *model.CostClaim) (*model.User, error) {
 	if obj.ApprovedByID == nil {
 		return nil, nil
@@ -76,14 +96,17 @@ func (r *costClaimResolver) Receipts(ctx context.Context, obj *model.CostClaim) 
 	return receipts, err
 }
 
-func (r *costClaimResolver) Total(ctx context.Context, obj *model.CostClaim) (float64, error) {
-	var total float64
+func (r *costClaimResolver) Events(ctx context.Context, obj *model.CostClaim) ([]*model.Event, error) {
+	var events []*model.Event
 
-	err := r.DB.GetContext(ctx, &total, `
-		SELECT ROUND(COALESCE(SUM(amount), 0), 2) FROM receipts WHERE cost_claim = ?
+	err := r.DB.SelectContext(ctx, &events, `
+		SELECT id, timestamp, status, comment, author
+		FROM cost_claim_events
+		WHERE cost_claim = ?
+		ORDER BY timestamp
 	`, obj.ID)
 
-	return total, err
+	return events, err
 }
 
 func (r *costPoolResolver) Total(ctx context.Context, obj *model.CostPool) (float64, error) {
@@ -123,8 +146,8 @@ func (r *costPoolResolver) CostClaims(ctx context.Context, obj *model.CostPool) 
 	var claims []*model.CostClaim
 
 	err := r.DB.SelectContext(ctx, &claims, `
-		SELECT id, running_number, description, author, cost_pool, status, details, created,
-		modified, approved_by, source_of_money FROM cost_claims WHERE cost_pool = ?
+		SELECT id, running_number, description, author, cost_pool, details, created,
+		modified, source_of_money, approved_by FROM cost_claims WHERE cost_pool = ?
 	`, obj.ID)
 
 	return claims, err
@@ -160,22 +183,40 @@ func (r *costPoolResolver) PurchaseInvoices(ctx context.Context, obj *model.Cost
 	return invoices, err
 }
 
+func (r *eventResolver) Author(ctx context.Context, obj *model.Event) (*model.User, error) {
+	return r.Query().User(ctx, &obj.AuthorID)
+}
+
 func (r *mutationResolver) CreateUser(ctx context.Context, user model.UserInput) (*model.User, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
+	}
+
+	ok, _ := access.Authorize(currentUser, "users", "create")
+	if !ok {
+		return nil, errUnauthorized
 	}
 
 	return r.MakeUser(ctx, user)
 }
 
 func (r *mutationResolver) UpdateUser(ctx context.Context, id string, user model.UserInput) (*model.User, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
 	}
 
-	_, err := r.DB.ExecContext(ctx, `
-		UPDATE users SET name = ?, email = ?, role = ? WHERE id = ?
-	`, user.Name, user.Email, user.Role, id)
+	ok, conditions := access.Authorize(currentUser, "users", "update")
+	if !ok {
+		return nil, errUnauthorized
+	}
+
+	conditions.Append("id = ?")
+
+	_, err := r.DB.ExecContext(ctx, fmt.Sprintf(`
+		UPDATE users SET name = ?, email = ?, role = ? %s
+	`, conditions), user.Name, user.Email, user.Role, id)
 	if err != nil {
 		return nil, err
 	}
@@ -184,13 +225,21 @@ func (r *mutationResolver) UpdateUser(ctx context.Context, id string, user model
 }
 
 func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (string, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return "", errNotAuthenticated
 	}
 
-	_, err := r.DB.ExecContext(ctx, `
-		DELETE FROM users WHERE id = ?
-	`, id)
+	ok, conditions := access.Authorize(currentUser, "users", "delete")
+	if !ok {
+		return "", errUnauthorized
+	}
+
+	conditions.Append("id = ?")
+
+	_, err := r.DB.ExecContext(ctx, fmt.Sprintf(`
+		DELETE FROM users %s
+	`, conditions), id)
 
 	return id, err
 }
@@ -221,14 +270,14 @@ func (r *mutationResolver) UpdateSettings(ctx context.Context, settings model.Se
 
 	_, err := r.DB.ExecContext(ctx, `
 		UPDATE users SET name = ?, email = ?, position = ?, phone = ?, iban = ? WHERE id = ?
-	`, settings.Name, settings.Email, settings.Position, settings.Phone, settings.Iban, userID)
+	`, settings.Name, settings.Email, settings.Position, settings.Phone, settings.Iban, *userID)
 
 	if err == nil && settings.NewPassword != nil {
 		err = r.setUserPassword(ctx, *userID, *settings.NewPassword)
 	}
 
 	if signature := settings.Signature; signature != nil && err == nil {
-		log.Infof("File upload for signature (%s): %s (%s %d bytes)", *userID, signature.Filename, signature.ContentType, signature.Size)
+		log.Infof("File upload for signature (%s): %s (%s %d bytes)", userID, signature.Filename, signature.ContentType, signature.Size)
 
 		parts := strings.Split(signature.Filename, ".")
 		extension := "." + parts[len(parts)-1]
@@ -238,8 +287,8 @@ func (r *mutationResolver) UpdateSettings(ctx context.Context, settings model.Se
 
 		if err == nil {
 			_, err = r.DB.ExecContext(ctx, `
-				UPDATE users SET signature = ? WHERE id = ?
-			`, signatureFileName, *userID)
+				UPDATE users SET signature = ? WHERE id =?
+			`, signatureFileName, userID)
 		}
 	}
 
@@ -258,9 +307,26 @@ func (r *mutationResolver) Logout(ctx context.Context) (bool, error) {
 	return true, session.Clear(ctx)
 }
 
+func (r *mutationResolver) RequestPasswordReset(ctx context.Context, email string) (string, error) {
+	err := r.sendPasswordResetEmail(ctx, email)
+	return email, err
+}
+
+func (r *mutationResolver) ResetPassword(ctx context.Context, token string, newPassword string) (string, error) {
+	err := r.resetPassword(ctx, token, newPassword)
+
+	return "", err
+}
+
 func (r *mutationResolver) CreateCostPool(ctx context.Context, costPool model.CostPoolInput) (*model.CostPool, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
+	}
+
+	ok, _ := access.Authorize(currentUser, "costPools", "create")
+	if !ok {
+		return nil, errUnauthorized
 	}
 
 	if costPool.Budget < 0 {
@@ -281,13 +347,21 @@ func (r *mutationResolver) CreateCostPool(ctx context.Context, costPool model.Co
 }
 
 func (r *mutationResolver) UpdateCostPool(ctx context.Context, id string, costPool model.CostPoolInput) (*model.CostPool, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
 	}
 
-	_, err := r.DB.ExecContext(ctx, `
-		UPDATE cost_pools SET name = ?, budget = ? WHERE id = ?
-	`, costPool.Name, costPool.Budget, id)
+	ok, conditions := access.Authorize(currentUser, "costPools", "update")
+	if !ok {
+		return nil, errUnauthorized
+	}
+
+	conditions.Append("id = ?")
+
+	_, err := r.DB.ExecContext(ctx, fmt.Sprintf(`
+		UPDATE cost_pools SET name = ?, budget = ? %s
+	`, conditions), costPool.Name, costPool.Budget, id)
 
 	return &model.CostPool{
 		ID:     id,
@@ -297,21 +371,34 @@ func (r *mutationResolver) UpdateCostPool(ctx context.Context, id string, costPo
 }
 
 func (r *mutationResolver) DeleteCostPool(ctx context.Context, id string) (string, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return "", errNotAuthenticated
 	}
 
-	_, err := r.DB.ExecContext(ctx, `
-		DELETE FROM cost_pools WHERE id = ?
-	`, id)
+	ok, conditions := access.Authorize(currentUser, "costPools", "delete")
+	if !ok {
+		return "", errUnauthorized
+	}
+
+	conditions.Append("id = ?")
+
+	_, err := r.DB.ExecContext(ctx, fmt.Sprintf(`
+		DELETE FROM cost_pools %s
+	`, conditions), id)
 
 	return id, err
 }
 
 func (r *mutationResolver) CreateCostClaim(ctx context.Context, costClaim model.CostClaimInput, receipts []*model.ReceiptInput) (*model.CostClaim, error) {
-	userID := session.Get(ctx)
-	if userID == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
+	}
+
+	ok, conditions := access.Authorize(currentUser, "costClaims", "create")
+	if !ok {
+		return nil, errUnauthorized
 	}
 
 	// pre check
@@ -339,24 +426,22 @@ func (r *mutationResolver) CreateCostClaim(ctx context.Context, costClaim model.
 		ID:            r.ShortID.MustGenerate(),
 		RunningNumber: runningNumber + 1,
 		Description:   costClaim.Description,
-		AuthorID:      *userID,
+		AuthorID:      currentUser.ID,
 		CostPoolID:    costClaim.CostPool,
-		Status:        "created",
 		Details:       costClaim.Details,
 		SourceOfMoney: costClaim.SourceOfMoney,
 		OtherIBAN:     costClaim.OtherIBAN,
 	}
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO cost_claims (id, running_number, description, author, cost_pool, status, details, source_of_money, other_iban)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO cost_claims (id, running_number, description, author, cost_pool, details, source_of_money, other_iban)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		newCostClaim.ID,
 		newCostClaim.RunningNumber,
 		newCostClaim.Description,
 		newCostClaim.AuthorID,
 		newCostClaim.CostPoolID,
-		newCostClaim.Status,
 		newCostClaim.Details,
 		newCostClaim.SourceOfMoney,
 		newCostClaim.OtherIBAN)
@@ -373,9 +458,11 @@ func (r *mutationResolver) CreateCostClaim(ctx context.Context, costClaim model.
 		}
 	}
 
-	err = tx.GetContext(ctx, &newCostClaim, `
-		SELECT created, modified FROM cost_claims WHERE id = ?
-	`, newCostClaim.ID)
+	conditions.Append("id = ?")
+
+	err = tx.GetContext(ctx, &newCostClaim, fmt.Sprintf(`
+		SELECT created, modified FROM cost_claims %s
+	`, conditions), newCostClaim.ID)
 	if err != nil {
 		tx.Rollback()
 		return &newCostClaim, err
@@ -386,8 +473,14 @@ func (r *mutationResolver) CreateCostClaim(ctx context.Context, costClaim model.
 }
 
 func (r *mutationResolver) UpdateCostClaim(ctx context.Context, id string, costClaim model.CostClaimInput, receipts []*model.ReceiptInput) (*model.CostClaim, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
+	}
+
+	ok, conditions := access.Authorize(currentUser, "costClaims", "update")
+	if !ok {
+		return nil, errUnauthorized
 	}
 
 	// pre check
@@ -434,13 +527,19 @@ func (r *mutationResolver) UpdateCostClaim(ctx context.Context, id string, costC
 		}
 	}
 
+	conditions.Append("id = ?")
+
 	// Update cost claim
-	_, err = tx.ExecContext(ctx, `
-		UPDATE cost_claims SET description = ?, cost_pool = ?, details = ?, source_of_money = ?, other_iban = ? WHERE id = ?
-	`, costClaim.Description, costClaim.CostPool, costClaim.Details, costClaim.SourceOfMoney, costClaim.OtherIBAN, id)
+	res, err := tx.ExecContext(ctx, fmt.Sprintf(`
+		UPDATE cost_claims SET description = ?, cost_pool = ?, details = ?, source_of_money = ?, other_iban = ? %s
+	`, conditions), costClaim.Description, costClaim.CostPool, costClaim.Details, costClaim.SourceOfMoney, costClaim.OtherIBAN, id)
 	if err != nil {
 		tx.Rollback()
 		return nil, err
+	}
+	if modified, _ := res.RowsAffected(); modified == 0 {
+		tx.Rollback()
+		return nil, errUnauthorized
 	}
 
 	// List which receipts have been removed (if any)
@@ -479,8 +578,14 @@ func (r *mutationResolver) UpdateCostClaim(ctx context.Context, id string, costC
 }
 
 func (r *mutationResolver) DeleteCostClaim(ctx context.Context, id string) (string, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return "", errNotAuthenticated
+	}
+
+	ok, conditions := access.Authorize(currentUser, "costClaims", "delete")
+	if !ok {
+		return "", errUnauthorized
 	}
 
 	var receipts []string
@@ -492,11 +597,16 @@ func (r *mutationResolver) DeleteCostClaim(ctx context.Context, id string) (stri
 		return id, err
 	}
 
-	_, err = r.DB.ExecContext(ctx, `
-		DELETE FROM cost_claims WHERE id = ?
-	`, id)
+	conditions.Append("id = ?")
+
+	res, err := r.DB.ExecContext(ctx, fmt.Sprintf(`
+		DELETE FROM cost_claims %s
+	`, conditions), id)
 	if err != nil {
 		return id, err
+	}
+	if modified, _ := res.RowsAffected(); modified == 0 {
+		return id, errUnauthorized
 	}
 
 	var errors error
@@ -510,63 +620,90 @@ func (r *mutationResolver) DeleteCostClaim(ctx context.Context, id string) (stri
 	return id, errors
 }
 
-func (r *mutationResolver) SetCostClaimStatus(ctx context.Context, id string, status model.Status) (*model.CostClaim, error) {
-	userID := session.Get(ctx)
-	if userID == nil {
+func (r *mutationResolver) SetCostClaimStatus(ctx context.Context, id string, status model.Status, comment *string) (*model.CostClaim, error) {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
 	}
 
-	var claim model.CostClaim
+	ok, conditions := access.Authorize(currentUser, "costClaims", "setStatus")
+	if !ok {
+		return nil, errUnauthorized
+	}
 
-	tx, err := r.DB.BeginTxx(ctx, nil)
+	var count int64
+	conditions.Append("id = ?")
+
+	err := r.DB.GetContext(ctx, &count, fmt.Sprintf(`
+		SELECT COUNT(*) FROM cost_claims %s
+	`, conditions), id)
 	if err != nil {
-		return &claim, nil
+		return nil, err
 	}
 
-	_, err = tx.ExecContext(ctx, `
-		UPDATE cost_claims SET status = ? WHERE id = ?
-	`, status, id)
+	event := model.Event{
+		ID:       r.ShortID.MustGenerate(),
+		AuthorID: currentUser.ID,
+		Status:   status,
+		Comment:  comment,
+	}
+
+	r.generateCommentForEvent(ctx, &event, id)
+
+	_, err = r.DB.ExecContext(ctx, `
+		INSERT INTO cost_claim_events (id, author, status, comment, cost_claim) VALUES (?, ?, ?, ?, ?)
+	`, event.ID, event.AuthorID, event.Status, event.Comment, id)
 	if err != nil {
-		tx.Rollback()
-		return &claim, err
+		return nil, err
 	}
 
-	if status == model.StatusApproved {
-		_, err = tx.ExecContext(ctx, `
-			UPDATE cost_claims SET approved_by = ? WHERE id = ?
-		`, *userID, id)
-	} else {
-		_, err = tx.ExecContext(ctx, `
-			UPDATE cost_claims SET approved_by = NULL WHERE id = ?
-		`, id)
+	return r.Query().CostClaim(ctx, id)
+}
+
+func (r *mutationResolver) RevokeCostClaimStatus(ctx context.Context, id string) (*model.CostClaim, error) {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
+		return nil, errNotAuthenticated
 	}
 
+	ok, conditions := access.Authorize(currentUser, "costClaims", "setStatus")
+	if !ok {
+		return nil, errUnauthorized
+	}
+
+	var eventID string
+	conditions.Append("cc.id = ?")
+
+	err := r.DB.GetContext(ctx, &eventID, fmt.Sprintf(`
+		SELECT cce.id FROM cost_claims cc
+		JOIN cost_claim_events cce ON cce.cost_claim = cc.id
+		%s
+		ORDER BY cce.timestamp DESC
+		LIMIT 1
+	`, conditions), id)
 	if err != nil {
-		tx.Rollback()
-		return &claim, err
+		return nil, err
 	}
 
-	err = tx.GetContext(ctx, &claim, `
-		SELECT id, running_number, description, author, cost_pool, status, details, created,
-		modified, approved_by, source_of_money FROM cost_claims
-		WHERE id = ?
-	`, id)
+	_, err = r.DB.ExecContext(ctx, `
+		DELETE FROM cost_claim_events WHERE id = ?
+	`, eventID)
 	if err != nil {
-		tx.Rollback()
-		return &claim, err
+		return nil, err
 	}
 
-	if err = tx.Commit(); err != nil {
-		tx.Rollback()
-		return &claim, err
-	}
-
-	return &claim, nil
+	return r.Query().CostClaim(ctx, id)
 }
 
 func (r *mutationResolver) CreateContact(ctx context.Context, contact model.ContactInput) (*model.Contact, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
+	}
+
+	ok, _ := access.Authorize(currentUser, "contacts", "create")
+	if !ok {
+		return nil, errUnauthorized
 	}
 
 	newContact := model.Contact{
@@ -586,33 +723,52 @@ func (r *mutationResolver) CreateContact(ctx context.Context, contact model.Cont
 }
 
 func (r *mutationResolver) UpdateContact(ctx context.Context, id string, contact model.ContactInput) (*model.Contact, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
 	}
 
-	_, err := r.DB.ExecContext(ctx, `
-		UPDATE contacts SET name = ?, address = ? WHERE id = ?
-	`, contact.Name, contact.Address, id)
+	ok, conditions := access.Authorize(currentUser, "contacts", "update")
+	if !ok {
+		return nil, errUnauthorized
+	}
+
+	_, err := r.DB.ExecContext(ctx, fmt.Sprintf(`
+		UPDATE contacts SET name = ?, address = ? %s
+	`, conditions), contact.Name, contact.Address, id)
 
 	return &model.Contact{ID: id, Name: contact.Name, Address: *contact.Address}, err
 }
 
 func (r *mutationResolver) DeleteContact(ctx context.Context, id string) (string, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return "", errNotAuthenticated
 	}
 
-	_, err := r.DB.ExecContext(ctx, `
-		DELETE FROM contacts WHERE id = ?
-	`, id)
+	ok, conditions := access.Authorize(currentUser, "contacts", "delete")
+	if !ok {
+		return "", errUnauthorized
+	}
+
+	conditions.Append("id = ?")
+
+	_, err := r.DB.ExecContext(ctx, fmt.Sprintf(`
+		DELETE FROM contacts %s
+	`, conditions), id)
 
 	return id, err
 }
 
 func (r *mutationResolver) CreatePurchaseInvoice(ctx context.Context, invoice model.PurchaseInvoiceInput, rows []*model.InvoiceRowInput) (*model.PurchaseInvoice, error) {
-	userID := session.Get(ctx)
-	if userID == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
+	}
+
+	ok, _ := access.Authorize(currentUser, "purchaseInvoices", "create")
+	if !ok {
+		return nil, errUnauthorized
 	}
 
 	tx, err := r.DB.BeginTxx(ctx, nil)
@@ -626,7 +782,7 @@ func (r *mutationResolver) CreatePurchaseInvoice(ctx context.Context, invoice mo
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO purchase_invoices (id, sender, description, due_date, details, author)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`, id, invoice.Sender, invoice.Description, invoice.DueDate, invoice.Details, *userID)
+	`, id, invoice.Sender, invoice.Description, invoice.DueDate, invoice.Details, currentUser.ID)
 	if err != nil {
 		tx.Rollback()
 		return nil, err
@@ -647,9 +803,17 @@ func (r *mutationResolver) CreatePurchaseInvoice(ctx context.Context, invoice mo
 }
 
 func (r *mutationResolver) UpdatePurchaseInvoice(ctx context.Context, id string, invoice model.PurchaseInvoiceInput, rows []*model.InvoiceRowInput) (*model.PurchaseInvoice, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
 	}
+
+	ok, conditions := access.Authorize(currentUser, "purchaseInvoices", "update")
+	if !ok {
+		return nil, errUnauthorized
+	}
+
+	conditions.Append("id = ?")
 
 	var oldRows, removedRows []*model.InvoiceRow
 
@@ -685,9 +849,9 @@ func (r *mutationResolver) UpdatePurchaseInvoice(ctx context.Context, id string,
 	}
 
 	// Update invoice
-	_, err = tx.ExecContext(ctx, `
-		UPDATE purchase_invoices SET sender = ?, description = ?, due_date = ?, details = ? WHERE id = ?
-	`, invoice.Sender, invoice.Description, invoice.DueDate, invoice.Details, id)
+	_, err = tx.ExecContext(ctx, fmt.Sprintf(`
+		UPDATE purchase_invoices SET sender = ?, description = ?, due_date = ?, details = ? %s
+	`, conditions), invoice.Sender, invoice.Description, invoice.DueDate, invoice.Details, id)
 	if err != nil {
 		tx.Rollback()
 		return nil, err
@@ -722,21 +886,34 @@ func (r *mutationResolver) UpdatePurchaseInvoice(ctx context.Context, id string,
 }
 
 func (r *mutationResolver) DeletePurchaseInvoice(ctx context.Context, id string) (string, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return "", errNotAuthenticated
 	}
 
-	_, err := r.DB.ExecContext(ctx, `
-		DELETE FROM purchase_invoices WHERE id = ?
-	`, id)
+	ok, conditions := access.Authorize(currentUser, "purchaseInvoices", "delete")
+	if !ok {
+		return "", errUnauthorized
+	}
+
+	conditions.Append("id = ?")
+
+	_, err := r.DB.ExecContext(ctx, fmt.Sprintf(`
+		DELETE FROM purchase_invoices %s
+	`, conditions), id)
 
 	return id, err
 }
 
 func (r *mutationResolver) CreateSalesInvoice(ctx context.Context, invoice model.SalesInvoiceInput, rows []*model.InvoiceRowInput) (*model.SalesInvoice, error) {
-	userID := session.Get(ctx)
-	if userID == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
+	}
+
+	ok, _ := access.Authorize(currentUser, "salesInvoices", "create")
+	if !ok {
+		return nil, errUnauthorized
 	}
 
 	tx, err := r.DB.BeginTxx(ctx, nil)
@@ -761,7 +938,7 @@ func (r *mutationResolver) CreateSalesInvoice(ctx context.Context, invoice model
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO sales_invoices (id, running_number, recipient, date, due_date, details, payer_reference, contact_person, author)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, id, runningNumber+1, invoice.Recipient, invoice.Date, invoice.DueDate, invoice.Details, invoice.PayerReference, invoice.ContactPerson, *userID)
+	`, id, runningNumber+1, invoice.Recipient, invoice.Date, invoice.DueDate, invoice.Details, invoice.PayerReference, invoice.ContactPerson, currentUser.ID)
 	if err != nil {
 		tx.Rollback()
 		return nil, err
@@ -782,9 +959,17 @@ func (r *mutationResolver) CreateSalesInvoice(ctx context.Context, invoice model
 }
 
 func (r *mutationResolver) UpdateSalesInvoice(ctx context.Context, id string, invoice model.SalesInvoiceInput, rows []*model.InvoiceRowInput) (*model.SalesInvoice, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
 	}
+
+	ok, conditions := access.Authorize(currentUser, "salesInvoices", "update")
+	if !ok {
+		return nil, errUnauthorized
+	}
+
+	conditions.Append("id = ?")
 
 	var oldRows, removedRows []*model.InvoiceRow
 
@@ -820,9 +1005,10 @@ func (r *mutationResolver) UpdateSalesInvoice(ctx context.Context, id string, in
 	}
 
 	// Update invoice
-	_, err = tx.ExecContext(ctx, `
-		UPDATE sales_invoices SET recipient = ?, date = ?, due_date = ?, details = ?, payer_reference = ?, contact_person = ? WHERE id = ?
-	`, invoice.Recipient, invoice.Date, invoice.DueDate, invoice.Details, invoice.PayerReference, invoice.ContactPerson, id)
+	_, err = tx.ExecContext(ctx, fmt.Sprintf(`
+		UPDATE sales_invoices SET recipient = ?, date = ?, due_date = ?, details = ?, payer_reference = ?, contact_person = ?
+		%s
+	`, conditions), invoice.Recipient, invoice.Date, invoice.DueDate, invoice.Details, invoice.PayerReference, invoice.ContactPerson, id)
 	if err != nil {
 		tx.Rollback()
 		return nil, err
@@ -857,13 +1043,21 @@ func (r *mutationResolver) UpdateSalesInvoice(ctx context.Context, id string, in
 }
 
 func (r *mutationResolver) DeleteSalesInvoice(ctx context.Context, id string) (string, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return "", errNotAuthenticated
 	}
 
-	_, err := r.DB.ExecContext(ctx, `
-		DELETE FROM sales_invoices WHERE id = ?
-	`, id)
+	ok, conditions := access.Authorize(currentUser, "salesInvoices", "delete")
+	if !ok {
+		return "", errUnauthorized
+	}
+
+	conditions.Append("id = ?")
+
+	_, err := r.DB.ExecContext(ctx, fmt.Sprintf(`
+		DELETE FROM sales_invoices %s
+	`, conditions), id)
 
 	return id, err
 }
@@ -893,16 +1087,6 @@ func (r *purchaseInvoiceResolver) Rows(ctx context.Context, obj *model.PurchaseI
 	return rows, err
 }
 
-func (r *purchaseInvoiceResolver) Total(ctx context.Context, obj *model.PurchaseInvoice) (float64, error) {
-	var total float64
-
-	err := r.DB.GetContext(ctx, &total, `
-		SELECT ROUND(COALESCE(SUM(amount), 0), 2) FROM purchase_invoice_rows WHERE invoice = ?
-	`, obj.ID)
-
-	return total, err
-}
-
 func (r *purchaseInvoiceRowResolver) Invoice(ctx context.Context, obj *model.PurchaseInvoiceRow) (*model.PurchaseInvoice, error) {
 	var invoice model.PurchaseInvoice
 
@@ -918,35 +1102,55 @@ func (r *purchaseInvoiceRowResolver) CostPool(ctx context.Context, obj *model.Pu
 	return r.Query().CostPool(ctx, obj.CostPoolID)
 }
 
-func (r *queryResolver) CostClaims(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions) (*model.CostClaimsConnection, error) {
-	userID := session.Get(ctx)
-	if userID == nil {
+func (r *queryResolver) CostClaims(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions, sortOptions *model.SortOptions) (*model.CostClaimsConnection, error) {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
 	}
 
-	var costClaims []*model.CostClaim
-
-	conditions := make(model.Conditions, 0)
-	if viewOptions != nil {
-		conditions = viewOptions.ToConditions(*userID)
+	ok, conditions := access.Authorize(currentUser, "costClaims", "read")
+	if !ok {
+		return nil, errUnauthorized
 	}
+
+	if viewOptions != nil {
+		conditions.Append(viewOptions.ToConditions(currentUser.ID)...)
+	}
+
+	orderClause := sortOptions.String(model.SortOptions{Key: "created", Order: "desc"})
+
+	log.Debug(orderClause)
 
 	limitClause := ""
 	if limit != nil {
 		limitClause = fmt.Sprintf("LIMIT %d OFFSET %d", *limit, offset)
 	}
+
+	var costClaims []*model.CostClaim
 	err := r.DB.SelectContext(ctx, &costClaims, fmt.Sprintf(`
-		SELECT id, running_number, description, author, cost_pool, status, details, created,
-		modified, approved_by, source_of_money FROM cost_claims %s ORDER BY created DESC %s
-		`, conditions, limitClause))
+		SELECT cc.id, running_number, description, author, cost_pool, details, created,
+		ROUND(COALESCE(SUM(receipts.amount), 0), 2) AS total, users.name AS author_name,
+		cce.status AS status,
+		modified, source_of_money, approved_by
+		FROM cost_claims cc
+		JOIN receipts ON cost_claim = cc.id
+		JOIN users ON users.id = cc.author
+		JOIN (
+			SELECT cost_claim, timestamp, status
+			FROM cost_claim_events
+			GROUP BY cost_claim
+			ORDER BY timestamp
+		) cce ON cce.cost_claim = cc.id 
+		%s GROUP BY cc.id %s %s
+		`, conditions, orderClause, limitClause))
 	if err != nil {
 		return nil, err
 	}
 
 	var totalCount int
-	err = r.DB.GetContext(ctx, &totalCount, `
-		SELECT COUNT(*) FROM cost_claims
-	`)
+	err = r.DB.GetContext(ctx, &totalCount, fmt.Sprintf(`
+		SELECT COUNT(*) FROM cost_claims %s
+	`, conditions))
 
 	return &model.CostClaimsConnection{
 		Nodes:      costClaims,
@@ -955,82 +1159,121 @@ func (r *queryResolver) CostClaims(ctx context.Context, limit *int, offset int, 
 }
 
 func (r *queryResolver) CostClaim(ctx context.Context, id string) (*model.CostClaim, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
 	}
 
+	ok, conditions := access.Authorize(currentUser, "costClaims", "read")
+	if !ok {
+		return nil, errUnauthorized
+	}
+	conditions.Append("id = ?")
+
 	var costClaim model.CostClaim
 
-	err := r.DB.GetContext(ctx, &costClaim, `
-		SELECT id, running_number, description, author, cost_pool, status, details, created,
-		modified, approved_by, source_of_money, other_iban FROM cost_claims
-		WHERE id = ?
-	`, id)
+	err := r.DB.GetContext(ctx, &costClaim, fmt.Sprintf(`
+		SELECT id, running_number, description, author, cost_pool, details, created,
+		modified, source_of_money, other_iban, approved_by FROM cost_claims
+		%s
+	`, conditions), id)
 
 	return &costClaim, err
 }
 
 func (r *queryResolver) User(ctx context.Context, id *string) (*model.User, error) {
-	var userID string
-	if sessionID := session.Get(ctx); sessionID != nil {
-		if id != nil {
-			userID = *id
-		} else {
-			userID = *sessionID
-		}
-	} else {
+	userID := session.Get(ctx)
+	if userID == nil {
 		return nil, errNotAuthenticated
 	}
 
+	var conditions model.Conditions
+	columns := ", email, signature, role, pw_hash, position, phone, iban"
+
+	if id != nil && userID != nil && *id != *userID {
+		currentUser, _ := r.Query().User(ctx, nil)
+		if currentUser == nil {
+			return nil, errNotAuthenticated
+		}
+
+		resource := "users"
+		userID = id
+
+		// Allow all users to query for the name of other users
+		var ok bool
+		ok, conditions = access.Authorize(currentUser, resource, "read")
+		if !ok {
+			columns = ""
+		}
+	}
+
+	conditions.Append("id = ?")
+
 	var user model.User
 
-	err := r.DB.GetContext(ctx, &user, `
-		SELECT id, name, email, signature, role, pw_hash, position, phone, iban FROM users WHERE id = ?
-	`, userID)
+	err := r.DB.GetContext(ctx, &user, fmt.Sprintf(`
+		SELECT id, name%s FROM users %s
+	`, columns, conditions), userID)
 
 	return &user, err
 }
 
-func (r *queryResolver) Users(ctx context.Context, limit *int, offset int) ([]*model.User, error) {
-	if session.Get(ctx) == nil {
+func (r *queryResolver) Users(ctx context.Context, limit *int, offset int, sortOptions *model.SortOptions) ([]*model.User, error) {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
 	}
 
+	ok, conditions := access.Authorize(currentUser, "users", "read")
+	if !ok {
+		return nil, errUnauthorized
+	}
+
 	var users []*model.User
+
+	orderClause := sortOptions.String(model.SortOptions{Key: "name", Order: "asc"})
 
 	limitClause := ""
 	if limit != nil {
 		limitClause = fmt.Sprintf("LIMIT %d OFFSET %d", *limit, offset)
 	}
 	err := r.DB.SelectContext(ctx, &users, fmt.Sprintf(`
-		SELECT id, name, email, signature, role, pw_hash, position, phone, iban FROM users ORDER BY name %s
-	`, limitClause))
+		SELECT id, name, email, signature, role, pw_hash, position, phone, iban FROM users %s %s %s
+	`, conditions, orderClause, limitClause))
 
 	return users, err
 }
 
-func (r *queryResolver) CostPools(ctx context.Context, limit *int, offset int) (*model.CostPoolsConnection, error) {
-	if session.Get(ctx) == nil {
+func (r *queryResolver) CostPools(ctx context.Context, limit *int, offset int, sortOptions *model.SortOptions) (*model.CostPoolsConnection, error) {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
 	}
 
+	ok, conditions := access.Authorize(currentUser, "costPools", "read")
+	if !ok {
+		return nil, errUnauthorized
+	}
+
 	var costPools []*model.CostPool
+
+	orderClause := sortOptions.String(model.SortOptions{Key: "name", Order: "asc"})
 
 	limitClause := ""
 	if limit != nil {
 		limitClause = fmt.Sprintf("LIMIT %d OFFSET %d", *limit, offset)
 	}
 	err := r.DB.SelectContext(ctx, &costPools, fmt.Sprintf(`
-		SELECT id, name, budget FROM cost_pools ORDER BY name %s
-	`, limitClause))
+		SELECT id, name, budget FROM cost_pools %s %s %s
+	`, conditions, orderClause, limitClause))
 	if err != nil {
 		return nil, err
 	}
 
 	var totalCount int
-	err = r.DB.GetContext(ctx, &totalCount, `
-		SELECT COUNT(*) FROM cost_pools
-	`)
+	err = r.DB.GetContext(ctx, &totalCount, fmt.Sprintf(`
+		SELECT COUNT(*) FROM cost_pools %s
+	`, conditions))
 
 	return &model.CostPoolsConnection{
 		Nodes:      costPools,
@@ -1039,31 +1282,46 @@ func (r *queryResolver) CostPools(ctx context.Context, limit *int, offset int) (
 }
 
 func (r *queryResolver) CostPool(ctx context.Context, id string) (*model.CostPool, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
+	}
+
+	ok, conditions := access.Authorize(currentUser, "costPools", "read")
+	if !ok {
+		return nil, errUnauthorized
 	}
 
 	var costPool model.CostPool
 
-	err := r.DB.GetContext(ctx, &costPool, `
-		SELECT id, name, budget FROM cost_pools WHERE id = ?
-	`, id)
+	conditions.Append("id = ?")
+
+	err := r.DB.GetContext(ctx, &costPool, fmt.Sprintf(`
+		SELECT id, name, budget FROM cost_pools %s
+	`, conditions), id)
 
 	return &costPool, err
 }
 
-func (r *queryResolver) Contacts(ctx context.Context, limit *int, offset int, searchTerm *string) (*model.ContactsConnection, error) {
-	if session.Get(ctx) == nil {
+func (r *queryResolver) Contacts(ctx context.Context, limit *int, offset int, searchTerm *string, sortOptions *model.SortOptions) (*model.ContactsConnection, error) {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
+	}
+
+	ok, conditions := access.Authorize(currentUser, "contacts", "read")
+	if !ok {
+		return nil, errUnauthorized
 	}
 
 	args := make([]interface{}, 0)
 
-	searchClause := ""
 	if searchTerm != nil && *searchTerm != "" {
-		searchClause = fmt.Sprintf("WHERE MATCH (name, address) AGAINST (?)")
+		conditions.Append("MATCH (name, address) AGAINST (?)")
 		args = append(args, *searchTerm)
 	}
+
+	orderClause := sortOptions.String(model.SortOptions{Key: "name", Order: "asc"})
 
 	limitClause := ""
 	if limit != nil {
@@ -1072,8 +1330,8 @@ func (r *queryResolver) Contacts(ctx context.Context, limit *int, offset int, se
 
 	var contacts []*model.Contact
 	err := r.DB.SelectContext(ctx, &contacts, fmt.Sprintf(`
-		SELECT id, name, address FROM contacts %s ORDER BY name %s
-	`, searchClause, limitClause), args...)
+		SELECT id, name, address FROM contacts %s %s %s
+	`, conditions, orderClause, limitClause), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -1081,7 +1339,7 @@ func (r *queryResolver) Contacts(ctx context.Context, limit *int, offset int, se
 	var totalCount int
 	err = r.DB.GetContext(ctx, &totalCount, fmt.Sprintf(`
 		SELECT COUNT(*) FROM contacts %s
-	`, searchClause), args...)
+	`, conditions), args...)
 
 	return &model.ContactsConnection{
 		Nodes:      contacts,
@@ -1090,29 +1348,43 @@ func (r *queryResolver) Contacts(ctx context.Context, limit *int, offset int, se
 }
 
 func (r *queryResolver) Contact(ctx context.Context, id string) (*model.Contact, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
+	}
+
+	ok, conditions := access.Authorize(currentUser, "contacts", "read")
+	if !ok {
+		return nil, errUnauthorized
 	}
 
 	var contact model.Contact
 
-	err := r.DB.GetContext(ctx, &contact, `
-		SELECT id, name, address FROM contacts WHERE id = ?
-	`, id)
+	conditions.Append("id = ?")
+
+	err := r.DB.GetContext(ctx, &contact, fmt.Sprintf(`
+		SELECT id, name, address FROM contacts %s
+	`, conditions), id)
 
 	return &contact, err
 }
 
-func (r *queryResolver) PurchaseInvoices(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions) (*model.PurchaseInvoicesConnection, error) {
-	userID := session.Get(ctx)
-	if userID == nil {
+func (r *queryResolver) PurchaseInvoices(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions, sortOptions *model.SortOptions) (*model.PurchaseInvoicesConnection, error) {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
 	}
 
-	conditions := make(model.Conditions, 0)
-	if viewOptions != nil {
-		conditions = viewOptions.ToConditions(*userID)
+	ok, conditions := access.Authorize(currentUser, "purchaseInvoices", "read")
+	if !ok {
+		return nil, errUnauthorized
 	}
+
+	if viewOptions != nil {
+		conditions.Append(viewOptions.ToConditions(currentUser.ID)...)
+	}
+
+	orderClause := sortOptions.String(model.SortOptions{Key: "created", Order: "desc"})
 
 	limitClause := ""
 	if limit != nil {
@@ -1121,17 +1393,21 @@ func (r *queryResolver) PurchaseInvoices(ctx context.Context, limit *int, offset
 
 	var invoices []*model.PurchaseInvoice
 	err := r.DB.SelectContext(ctx, &invoices, fmt.Sprintf(`
-		SELECT id, sender, description, due_date, status, created, modified, details, author
-		FROM purchase_invoices %s ORDER BY created DESC %s
-	`, conditions, limitClause))
+		SELECT pi.id, sender, pi.description, due_date, status, created, modified, details, author, approved_by,
+		ROUND(COALESCE(SUM(pir.amount), 0), 2) AS total, contacts.name AS sender_name
+		FROM purchase_invoices pi
+		JOIN purchase_invoice_rows pir ON pir.invoice = pi.id
+		JOIN contacts ON contacts.id = pi.sender
+		%s GROUP BY pi.id %s %s
+	`, conditions, orderClause, limitClause))
 	if err != nil {
 		return nil, err
 	}
 
 	var totalCount int
-	err = r.DB.GetContext(ctx, &totalCount, `
-		SELECT COUNT(*) FROM purchase_invoices
-	`)
+	err = r.DB.GetContext(ctx, &totalCount, fmt.Sprintf(`
+		SELECT COUNT(*) FROM purchase_invoices %s
+	`, conditions))
 	if err != nil {
 		return nil, err
 	}
@@ -1143,29 +1419,43 @@ func (r *queryResolver) PurchaseInvoices(ctx context.Context, limit *int, offset
 }
 
 func (r *queryResolver) PurchaseInvoice(ctx context.Context, id string) (*model.PurchaseInvoice, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
 	}
 
+	ok, conditions := access.Authorize(currentUser, "purchaseInvoices", "read")
+	if !ok {
+		return nil, errUnauthorized
+	}
+
+	conditions.Append("id = ?")
+
 	var invoice model.PurchaseInvoice
-	err := r.DB.GetContext(ctx, &invoice, `
-		SELECT id, sender, description, due_date, status, created, modified, details, author
-		FROM purchase_invoices WHERE id = ?
-	`, id)
+	err := r.DB.GetContext(ctx, &invoice, fmt.Sprintf(`
+		SELECT id, sender, description, due_date, status, created, modified, details, author, approved_by
+		FROM purchase_invoices %s
+	`, conditions), id)
 
 	return &invoice, err
 }
 
-func (r *queryResolver) SalesInvoices(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions) (*model.SalesInvoicesConnection, error) {
-	userID := session.Get(ctx)
-	if userID == nil {
+func (r *queryResolver) SalesInvoices(ctx context.Context, limit *int, offset int, viewOptions *model.ViewOptions, sortOptions *model.SortOptions) (*model.SalesInvoicesConnection, error) {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
 	}
 
-	conditions := make(model.Conditions, 0)
-	if viewOptions != nil {
-		conditions = viewOptions.ToConditions(*userID)
+	ok, conditions := access.Authorize(currentUser, "salesInvoices", "read")
+	if !ok {
+		return nil, errUnauthorized
 	}
+
+	if viewOptions != nil {
+		conditions.Append(viewOptions.ToConditions(currentUser.ID)...)
+	}
+
+	orderClause := sortOptions.String(model.SortOptions{Key: "date", Order: "desc"})
 
 	limitClause := ""
 	if limit != nil {
@@ -1174,17 +1464,21 @@ func (r *queryResolver) SalesInvoices(ctx context.Context, limit *int, offset in
 
 	var invoices []*model.SalesInvoice
 	err := r.DB.SelectContext(ctx, &invoices, fmt.Sprintf(`
-		SELECT id, running_number, recipient, date, due_date, status, details, payer_reference, contact_person, created, modified, author
-		FROM sales_invoices %s ORDER BY date DESC %s
-	`, conditions, limitClause))
+		SELECT si.id, running_number, recipient, date, due_date, status, details, payer_reference, contact_person, created, modified, author,
+		ROUND(COALESCE(SUM(sir.amount), 0), 2) AS total, contacts.name AS recipient_name
+		FROM sales_invoices si
+		JOIN sales_invoice_rows sir ON sir.invoice = si.id
+		JOIN contacts ON contacts.id = si.recipient
+		%s GROUP BY si.id %s %s
+	`, conditions, orderClause, limitClause))
 	if err != nil {
 		return nil, err
 	}
 
 	var totalCount int
-	err = r.DB.GetContext(ctx, &totalCount, `
-		SELECT COUNT(*) FROM sales_invoices
-	`)
+	err = r.DB.GetContext(ctx, &totalCount, fmt.Sprintf(`
+		SELECT COUNT(*) FROM sales_invoices %s
+	`, conditions))
 	if err != nil {
 		return nil, err
 	}
@@ -1196,15 +1490,23 @@ func (r *queryResolver) SalesInvoices(ctx context.Context, limit *int, offset in
 }
 
 func (r *queryResolver) SalesInvoice(ctx context.Context, id string) (*model.SalesInvoice, error) {
-	if session.Get(ctx) == nil {
+	currentUser, _ := r.Query().User(ctx, session.Get(ctx))
+	if currentUser == nil {
 		return nil, errNotAuthenticated
 	}
 
+	ok, conditions := access.Authorize(currentUser, "salesInvoices", "read")
+	if !ok {
+		return nil, errUnauthorized
+	}
+
+	conditions.Append("id = ?")
+
 	var invoice model.SalesInvoice
-	err := r.DB.GetContext(ctx, &invoice, `
+	err := r.DB.GetContext(ctx, &invoice, fmt.Sprintf(`
 		SELECT id, running_number, recipient, date, due_date, status, details, payer_reference, contact_person, created, modified, author
-		FROM sales_invoices WHERE id = ?
-	`, id)
+		FROM sales_invoices %s
+	`, conditions), id)
 
 	return &invoice, err
 }
@@ -1217,6 +1519,11 @@ func (r *queryResolver) SystemInfo(ctx context.Context) (*model.SystemInfo, erro
 		ServerVersion: r.ServerVersion,
 		Database:      dbVersion,
 	}, err
+}
+
+func (r *queryResolver) AccessPolicy(ctx context.Context) (string, error) {
+	policy, err := json.Marshal(access.Policy)
+	return string(policy), err
 }
 
 func (r *salesInvoiceResolver) Author(ctx context.Context, obj *model.SalesInvoice) (*model.User, error) {
@@ -1253,16 +1560,6 @@ func (r *salesInvoiceResolver) Rows(ctx context.Context, obj *model.SalesInvoice
 	return rows, err
 }
 
-func (r *salesInvoiceResolver) Total(ctx context.Context, obj *model.SalesInvoice) (float64, error) {
-	var total float64
-
-	err := r.DB.GetContext(ctx, &total, `
-		SELECT ROUND(COALESCE(SUM(amount), 0), 2) FROM sales_invoice_rows WHERE invoice = ?
-	`, obj.ID)
-
-	return total, err
-}
-
 func (r *salesInvoiceRowResolver) Invoice(ctx context.Context, obj *model.SalesInvoiceRow) (*model.SalesInvoice, error) {
 	var invoice model.SalesInvoice
 
@@ -1291,8 +1588,8 @@ func (r *userResolver) CostClaims(ctx context.Context, obj *model.User) ([]*mode
 	var costClaims []*model.CostClaim
 
 	err := r.DB.SelectContext(ctx, &costClaims, `
-		SELECT id, running_number, description, author, cost_pool, status, details, created,
-		modified, approved_by, source_of_money FROM cost_claims WHERE author = ? ORDER BY created DESC
+		SELECT id, running_number, description, author, cost_pool, details, created,
+		modified, source_of_money, approved_by FROM cost_claims WHERE author = ? ORDER BY created DESC
 		`, obj.ID)
 
 	return costClaims, err
@@ -1337,6 +1634,9 @@ func (r *Resolver) CostClaim() generated.CostClaimResolver { return &costClaimRe
 // CostPool returns generated.CostPoolResolver implementation.
 func (r *Resolver) CostPool() generated.CostPoolResolver { return &costPoolResolver{r} }
 
+// Event returns generated.EventResolver implementation.
+func (r *Resolver) Event() generated.EventResolver { return &eventResolver{r} }
+
 // Mutation returns generated.MutationResolver implementation.
 func (r *Resolver) Mutation() generated.MutationResolver { return &mutationResolver{r} }
 
@@ -1367,6 +1667,7 @@ func (r *Resolver) User() generated.UserResolver { return &userResolver{r} }
 type contactResolver struct{ *Resolver }
 type costClaimResolver struct{ *Resolver }
 type costPoolResolver struct{ *Resolver }
+type eventResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
 type purchaseInvoiceResolver struct{ *Resolver }
 type purchaseInvoiceRowResolver struct{ *Resolver }
