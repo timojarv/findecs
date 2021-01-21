@@ -24,7 +24,7 @@
     "date-fns": "^2.12.0",
     "emotion-theming": "^10.0.27",
     "graphql": "^15.0.0",
-    "immer": "^6.0.3",
+    "immer": "^8.0.1",
     "parcel": "^2.0.0-beta.1",
     "prop-types": "^15.7.2",
     "react": "^16.12.0",
